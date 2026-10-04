@@ -3,15 +3,21 @@ on:
   pull_request: {branches: [develop]}
   push: {branches: [develop]}
   workflow_dispatch:
-permissions: {contents: read, packages: write}
-concurrency: {group: fkit-bi-web-${{ github.ref }}, cancel-in-progress: false}
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: fkit-bi-web-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: {node-version: 22, cache: npm}
+        with:
+          node-version: 22
+          cache: npm
       - run: npm ci && npm run typecheck && npm run build
       - run: docker build -t fkit-bi-web:${{ github.sha }} .
   publish-deploy:
@@ -21,9 +27,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3
-        with: {registry: ghcr.io, username: ${{ github.actor }}, password: ${{ secrets.GITHUB_TOKEN }}}
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
-        with: {context: ., push: true, tags: ghcr.io/fkit-bi/fkit-bi-web:dev,ghcr.io/fkit-bi/fkit-bi-web:${{ github.sha }}}
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/fkit-bi/fkit-bi-web:dev,ghcr.io/fkit-bi/fkit-bi-web:${{ github.sha }}
       - name: Report disabled Dev deployment
         if: vars.FKIT_BI_DEV_DEPLOY_ENABLED != 'true'
         run: echo 'Dev deployment is disabled by FKIT_BI_DEV_DEPLOY_ENABLED.' >> "$GITHUB_STEP_SUMMARY"
