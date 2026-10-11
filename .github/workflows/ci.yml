@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci && npm run typecheck && npm run build
+      - run: npm ci && npm test && npm run typecheck && npm run build
       - run: docker build -t fkit-bi-web:${{ github.sha }} .
   publish-deploy:
     if: github.event_name == 'push'

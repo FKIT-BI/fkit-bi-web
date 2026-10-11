@@ -3,7 +3,27 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "scripts": {"dev": "vite", "build": "tsc -b && vite build", "typecheck": "tsc -b --pretty false"},
-  "dependencies": {"@vitejs/plugin-react": "latest", "vite": "latest", "react": "latest", "react-dom": "latest"},
-  "devDependencies": {"typescript": "latest", "@types/react": "latest", "@types/react-dom": "latest"}
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "generate:api": "openapi-typescript ../fkit-bi-analytics/docs/contracts/analytics-api-draft.yaml -o src/api/analytics.generated.ts && openapi-typescript ../fkit-bi-infra/docs/contracts/auth-api.yaml -o src/api/auth.generated.ts"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "jsdom": "^26.1.0",
+    "openapi-typescript": "^7.13.0",
+    "typescript": "latest",
+    "vitest": "^5.0.3"
+  }
 }
