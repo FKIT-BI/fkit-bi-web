@@ -96,6 +96,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/scenarios/{scenarioId}/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenarioId: components["parameters"]["ScenarioId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Создать копию сценария
+         * @description Создаёт новый сценарий того же предприятия с теми же машинами, базовыми поведениями, фазами и режимом цикла. Копия сохраняется в статусе DISABLED независимо от статуса исходного сценария; описание берётся из исходного, если не передано.
+         */
+        post: operations["copyScenario"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs": {
         parameters: {
             query?: never;
@@ -236,6 +258,18 @@ export interface components {
             cycleMode: components["schemas"]["CycleMode"];
             machineTargets: components["schemas"]["MachineTargetInput"][];
             phases: components["schemas"]["ScenarioPhaseInput"][];
+        };
+        /**
+         * @example {
+         *       "code": "DEMO_JAR_LINE_BAD_WEEK",
+         *       "name": "Розлив кремов: плохая неделя",
+         *       "description": "Копия типовой смены для варианта с частыми авариями"
+         *     }
+         */
+        ScenarioCopy: {
+            code: string;
+            name: string;
+            description?: string | null;
         };
         ScenarioUpdate: {
             name: string;
@@ -921,6 +955,39 @@ export interface operations {
             /** @description Сценарий с новым статусом */
             200: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    copyScenario: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenarioId: components["parameters"]["ScenarioId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScenarioCopy"];
+            };
+        };
+        responses: {
+            /** @description Копия создана в статусе DISABLED */
+            201: {
+                headers: {
+                    Location: components["headers"]["Location"];
                     [name: string]: unknown;
                 };
                 content: {

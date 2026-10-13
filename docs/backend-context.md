@@ -85,7 +85,7 @@ Live-периоды («Сегодня», текущая смена): `to` мож
 
 ## 4. Generator API (`/api/v1`)
 
-- **Сценарии**: `GET|POST /scenarios` (`enterpriseId`, `status`, `search`, `page`, `size`), `POST /scenarios/validate`, `GET|PUT /scenarios/{id}`, `PUT /scenarios/{id}/status`.
+- **Сценарии**: `GET|POST /scenarios` (`enterpriseId`, `status`, `search`, `page`, `size`), `POST /scenarios/validate`, `GET|PUT /scenarios/{id}`, `PUT /scenarios/{id}/status`, `POST /scenarios/{id}/copy` (`code`, `name`, `description?` → новая копия в `DISABLED`).
   Создаётся в `DISABLED`; активация отдельной командой (перепроверяет оборудование). Тело: имя, описание, `cycleMode` (напр. `LOOP`), `machineTargets[{machineId, baseBehaviors}]`, `phases[{code, name, durationMs, expectedState, behaviorOverrides}]`; PUT заменяет конфиг целиком. Валидация возвращает `issues` (severity `ERROR|WARNING`), а не 4xx.
 - **Запуски**: `GET|POST /runs`, `POST /runs/validate`, `GET /runs/{id}`, `POST /runs/{id}/stop`, `POST /runs/{id}/retry`.
   - `RunCreate` — union по `mode`: `REALTIME` (`scenarioId, randomSeed, durationMs`), `HISTORICAL` (период), `SCHEDULED` (`scheduledStartAt, durationMs`). `POST /runs` → **202** + `Idempotency-Key`.

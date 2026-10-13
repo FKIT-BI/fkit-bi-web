@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { renderPage, setupPageTests } from '@/shared/mocks/testing';
 import { useGeneratorNav } from '@/shared/model';
+import { copyCode } from './CopyScenarioModal';
 import GeneratorPage from './index';
 
 setupPageTests();
@@ -50,6 +51,33 @@ describe('страница генерации', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Создать' }));
     // без машин сервер отвечает 422 — ошибка показана в форме
     expect(await within(dialog).findByText(/Выберите хотя бы одну машину|Request body is invalid/)).toBeTruthy();
+  });
+
+  it('копирует сценарий отключённым и открывает копию в редакторе', async () => {
+    const user = userEvent.setup();
+    await renderPage(<GeneratorPage />);
+    await screen.findByText('Экструзия: норма и перегрев');
+    await user.click(screen.getAllByLabelText('Копировать')[0]);
+    const dialog = await screen.findByRole('dialog', { name: 'Копирование сценария' });
+    const code = within(dialog).getByLabelText(/^Код/) as HTMLInputElement;
+    expect(code.value).toMatch(/_COPY$/);
+
+    // занятый код — ошибка у поля, копия не создаётся
+    const taken = code.value.replace(/_COPY$/, '');
+    fireEvent.change(code, { target: { value: taken } });
+    await user.click(within(dialog).getByRole('button', { name: 'Создать копию' }));
+    expect(await within(dialog).findByText('Сценарий с таким кодом уже есть')).toBeTruthy();
+
+    fireEvent.change(code, { target: { value: `${taken}_COPY` } });
+    await user.click(within(dialog).getByRole('button', { name: 'Создать копию' }));
+    expect(await screen.findByRole('dialog', { name: 'Редактирование сценария' })).toBeTruthy();
+    expect(await screen.findByText('Фазы (2)')).toBeTruthy();
+  });
+
+  it('предлагает код копии в пределах 64 символов', () => {
+    expect(copyCode('LINE_A')).toBe('LINE_A_COPY');
+    expect(copyCode('LINE_A', 2)).toBe('LINE_A_COPY_2');
+    expect(copyCode('A'.repeat(64))).toHaveLength(64);
   });
 
   it('быстрая генерация: собирает сценарий, активирует и запускает историю', async () => {
