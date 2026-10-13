@@ -2,6 +2,16 @@ import { queryOptions } from '@tanstack/react-query';
 import { toIso } from '../lib/time';
 import { analyticsClient as A, unwrap } from './client';
 import type {
+  ComponentUpdate,
+  EnterpriseUpdate,
+  LossReasonCreate,
+  LossReasonUpdate,
+  MachineUpdate,
+  ProductionLineUpdate,
+  ShiftCreate,
+  ShiftUpdate,
+  TelemetrySignalUpdate,
+  UserCreate,
   ComponentCreate,
   ConfigStatus,
   EnterpriseCreate,
@@ -200,8 +210,81 @@ const allPages = async <T>(load: (page: number) => Promise<{ items: T[]; page: {
   return [first, ...rest].flatMap((p) => p.items);
 };
 
+const byStatuses = async <T>(load: (status: ConfigStatus) => Promise<T[]>) => {
+  const [active, disabled] = await Promise.all([load('ACTIVE'), load('DISABLED')]);
+  return [...active, ...disabled];
+};
+
 export const setup = {
   enterprises: () => allPages((page) => unwrap(A.GET('/enterprises', { params: { query: { page, size: 200 } } }))),
+  allEnterprises: () =>
+    byStatuses((status) => allPages((page) => unwrap(A.GET('/enterprises', { params: { query: { status, page, size: 200 } } })))),
+  updateEnterprise: (enterpriseId: string, body: EnterpriseUpdate) =>
+    unwrap(A.PUT('/enterprises/{enterpriseId}', { params: { path: { enterpriseId } }, body })),
+  setEnterpriseStatus: (enterpriseId: string, status: ConfigStatus) =>
+    unwrap(A.PUT('/enterprises/{enterpriseId}/status', { params: { path: { enterpriseId } }, body: { status } })),
+
+  shifts: (enterpriseId: string) =>
+    byStatuses((status) =>
+      allPages((page) => unwrap(A.GET('/enterprises/{enterpriseId}/shifts', { params: { path: { enterpriseId }, query: { status, page, size: 200 } } }))),
+    ),
+  createShift: (enterpriseId: string, body: ShiftCreate) =>
+    unwrap(A.POST('/enterprises/{enterpriseId}/shifts', { params: { path: { enterpriseId } }, body })),
+  updateShift: (shiftId: string, body: ShiftUpdate) => unwrap(A.PUT('/shifts/{shiftId}', { params: { path: { shiftId } }, body })),
+  setShiftStatus: (shiftId: string, status: ConfigStatus) =>
+    unwrap(A.PUT('/shifts/{shiftId}/status', { params: { path: { shiftId } }, body: { status } })),
+
+  lossReasons: (enterpriseId: string) =>
+    byStatuses((status) =>
+      allPages((page) =>
+        unwrap(A.GET('/enterprises/{enterpriseId}/loss-reasons', { params: { path: { enterpriseId }, query: { status, page, size: 200 } } })),
+      ),
+    ),
+  createLossReason: (enterpriseId: string, body: LossReasonCreate) =>
+    unwrap(A.POST('/enterprises/{enterpriseId}/loss-reasons', { params: { path: { enterpriseId } }, body })),
+  updateLossReason: (lossReasonId: string, body: LossReasonUpdate) =>
+    unwrap(A.PUT('/loss-reasons/{lossReasonId}', { params: { path: { lossReasonId } }, body })),
+  setLossReasonStatus: (lossReasonId: string, status: ConfigStatus) =>
+    unwrap(A.PUT('/loss-reasons/{lossReasonId}/status', { params: { path: { lossReasonId } }, body: { status } })),
+
+  allLines: (enterpriseId: string) =>
+    byStatuses((status) =>
+      allPages((page) => unwrap(A.GET('/enterprises/{enterpriseId}/lines', { params: { path: { enterpriseId }, query: { status, page, size: 200 } } }))),
+    ),
+  updateLine: (lineId: string, body: ProductionLineUpdate) => unwrap(A.PUT('/lines/{lineId}', { params: { path: { lineId } }, body })),
+  setLineStatus: (lineId: string, status: ConfigStatus) =>
+    unwrap(A.PUT('/lines/{lineId}/status', { params: { path: { lineId } }, body: { status } })),
+
+  machine: (machineId: string) => unwrap(A.GET('/machines/{machineId}', { params: { path: { machineId } } })),
+  updateMachine: (machineId: string, body: MachineUpdate) =>
+    unwrap(A.PUT('/machines/{machineId}', { params: { path: { machineId } }, body })),
+
+  allComponents: (machineId: string) =>
+    byStatuses(async (status) => (await unwrap(A.GET('/machines/{machineId}/components', { params: { path: { machineId }, query: { status } } }))).items),
+  updateComponent: (componentId: string, body: ComponentUpdate) =>
+    unwrap(A.PUT('/components/{componentId}', { params: { path: { componentId } }, body })),
+  moveComponent: (componentId: string, parentComponentId: string | null) =>
+    unwrap(A.PUT('/components/{componentId}/parent', { params: { path: { componentId } }, body: { parentComponentId } })),
+  setComponentStatus: (componentId: string, status: ConfigStatus) =>
+    unwrap(A.PUT('/components/{componentId}/status', { params: { path: { componentId } }, body: { status } })),
+
+  allSignals: (machineId: string) =>
+    byStatuses((status) =>
+      allPages((page) =>
+        unwrap(A.GET('/machines/{machineId}/telemetry-signals', { params: { path: { machineId }, query: { status, page, size: 200 } } })),
+      ),
+    ),
+  updateSignal: (signalId: string, body: TelemetrySignalUpdate) =>
+    unwrap(A.PUT('/telemetry-signals/{signalId}', { params: { path: { signalId } }, body })),
+  setSignalStatus: (signalId: string, status: ConfigStatus) =>
+    unwrap(A.PUT('/telemetry-signals/{signalId}/status', { params: { path: { signalId } }, body: { status } })),
+
+  stateConfig: async (machineId: string) => {
+    const r = await A.GET('/machines/{machineId}/state-configuration', { params: { path: { machineId } } });
+    if (r.response.status === 404) return null;
+    return unwrap(Promise.resolve(r));
+  },
+  createUser: (body: UserCreate) => unwrap(A.POST('/auth/users', { body })),
   createEnterprise: (body: EnterpriseCreate) => unwrap(A.POST('/enterprises', { body })),
   lines: (enterpriseId: string) =>
     allPages((page) => unwrap(A.GET('/enterprises/{enterpriseId}/lines', { params: { path: { enterpriseId }, query: { page, size: 200 } } }))),

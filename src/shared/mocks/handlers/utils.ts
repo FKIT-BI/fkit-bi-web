@@ -1,7 +1,9 @@
 import { delay, http, HttpResponse, type DefaultBodyType, type PathParams } from 'msw';
 import { MOCK_CONFIG } from '../config';
+import { loadPersisted, savePersisted } from '../persist';
 
 export const BASE = '*/api/analytics/api/v1';
+export const GEN_BASE = '*/api/generator/api/v1';
 
 export const latency = () => {
   const [a, b] = MOCK_CONFIG.latencyMs;
@@ -59,6 +61,21 @@ export const byStatus = <T extends { status: string }>(items: T[], request: Requ
 type Method = 'get' | 'post' | 'put' | 'delete';
 type Resolver = (args: { request: Request; params: PathParams }) => Response | Promise<Response>;
 
+export function makeRoute(base: string) {
+  return (method: Method, path: string, resolve: Resolver, opts: { auth?: boolean; failable?: boolean } = {}) =>
+    http[method]<PathParams, DefaultBodyType>(`${base}${path}`, async ({ request, params }) => {
+      await latency();
+      if (opts.auth !== false && !request.headers.get('Authorization')?.startsWith('Bearer ')) {
+        return apiError(401, 'AUTHENTICATION_FAILED', 'Authentication failed');
+      }
+      if (opts.failable && mockErrorFlag(request)) return apiError(500, 'INTERNAL_ERROR', 'Mock error (mockError=1)');
+      loadPersisted();
+      const response = await resolve({ request, params });
+      if (method !== 'get') savePersisted();
+      return response;
+    });
+}
+
 export function route(method: Method, path: string, resolve: Resolver, opts: { auth?: boolean; failable?: boolean } = {}) {
   return http[method]<PathParams, DefaultBodyType>(`${BASE}${path}`, async ({ request, params }) => {
     await latency();
@@ -66,6 +83,9 @@ export function route(method: Method, path: string, resolve: Resolver, opts: { a
       return apiError(401, 'AUTHENTICATION_FAILED', 'Authentication failed');
     }
     if (opts.failable && mockErrorFlag(request)) return apiError(500, 'INTERNAL_ERROR', 'Mock error (mockError=1)');
-    return resolve({ request, params });
+    loadPersisted();
+    const response = await resolve({ request, params });
+    if (method !== 'get') savePersisted();
+    return response;
   });
 }

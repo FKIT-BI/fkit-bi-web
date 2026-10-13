@@ -31,7 +31,7 @@ const specOps = new Set(
     METHODS.filter((m) => m in item).map((m) => `${m.toUpperCase()} ${path.replace(/\{(\w+)\}/g, ':$1')}`),
   ),
 );
-const mockOps = handlers.map((h) => `${h.info.method} ${String(h.info.path).replace(/^\*\/api\/analytics\/api\/v1/, '').replace(/:\w+/g, (p) => p)}`);
+const mockOps = handlers.filter((h) => String(h.info.path).includes('/api/analytics/')).map((h) => `${h.info.method} ${String(h.info.path).replace(/^\*\/api\/analytics\/api\/v1/, '').replace(/:\w+/g, (p) => p)}`);
 const normalize = (op: string) => op.replace(/:\w+/g, ':p');
 
 const server = setupServer(...handlers);
@@ -229,5 +229,65 @@ describe('настройка оборудования (Epic 2)', () => {
     const active = await call(`/machines/${id}/status`, { method: 'PUT', body: { status: 'ACTIVE' } });
     expect(validate('Machine', active.json)).toEqual([]);
     expect(active.json.status).toBe('ACTIVE');
+  });
+});
+
+describe('админские моки валидны по схемам бэкенда', () => {
+  const ent = ENTERPRISE_ID;
+  it('смены: создание, правка, статус', async () => {
+    const bad = await call(`/enterprises/${ent}/shifts`, { method: 'POST', body: { code: 'x', name: '', startLocalTime: '25:00', endLocalTime: '08:00', validFrom: '2026-01-01' } });
+    expect(bad.status).toBe(422);
+    expect(validate('ErrorResponse', bad.json)).toEqual([]);
+    const created = await call(`/enterprises/${ent}/shifts`, { method: 'POST', body: { code: 'EVENING', name: 'Вечер', startLocalTime: '16:00', endLocalTime: '00:00', validFrom: '2026-01-01', validTo: null, sortOrder: 5 } });
+    expect(created.status).toBe(201);
+    expect(validate('Shift', created.json)).toEqual([]);
+    const upd = await call(`/shifts/${created.json.id}`, { method: 'PUT', body: { name: 'Вечерняя', startLocalTime: '16:00', endLocalTime: '23:00', validFrom: '2026-01-01', validTo: null, sortOrder: 5 } });
+    expect(upd.status).toBe(200);
+    expect(upd.json.endLocalTime).toBe('23:00');
+    const used = await call(`/shifts/${SHIFTS[0].id}`, { method: 'PUT', body: { name: 'День', startLocalTime: '09:00', endLocalTime: '20:00', validFrom: '2026-06-01', validTo: null, sortOrder: 1 } });
+    expect(used.status).toBe(409);
+    const off = await call(`/shifts/${created.json.id}/status`, { method: 'PUT', body: { status: 'DISABLED' } });
+    expect(off.json.status).toBe('DISABLED');
+  });
+
+  it('причины потерь и линии', async () => {
+    const r = await call(`/enterprises/${ent}/loss-reasons`, { method: 'POST', body: { code: 'TEST_REASON', name: 'Тест', category: 'OTHER', color: '#112233' } });
+    expect(r.status).toBe(201);
+    expect(validate('LossReason', r.json)).toEqual([]);
+    expect((await call(`/enterprises/${ent}/loss-reasons`, { method: 'POST', body: { code: 'TEST_REASON', name: 'Тест', category: 'OTHER' } })).status).toBe(409);
+    const u = await call(`/loss-reasons/${r.json.id}`, { method: 'PUT', body: { name: 'Тест 2', category: 'PROCESS', description: null, color: null } });
+    expect(validate('LossReason', u.json)).toEqual([]);
+    const line = await call(`/lines/${LINES[0].id}`, { method: 'PUT', body: { name: 'Переименована', sortOrder: 1 } });
+    expect(validate('ProductionLine', line.json)).toEqual([]);
+    const blocked = await call(`/lines/${LINES[0].id}/status`, { method: 'PUT', body: { status: 'DISABLED' } });
+    expect(blocked.status).toBe(409);
+  });
+
+  it('предприятие, машина, компонент, сигнал', async () => {
+    const e = await call(`/enterprises/${ent}`, { method: 'PUT', body: { name: 'Завод', timezone: 'Europe/Moscow' } });
+    expect(validate('Enterprise', e.json)).toEqual([]);
+    expect((await call(`/enterprises/${ent}/status`, { method: 'PUT', body: { status: 'DISABLED' } })).status).toBe(409);
+
+    const m = await call(`/machines/${MACHINES[0].id}`, { method: 'PUT', body: { name: 'Экструдер', machineType: null, nominalRate: 1300, parameters: [] } });
+    expect(m.status).toBe(200);
+    expect(validate('Machine', m.json)).toEqual([]);
+    expect((await call(`/machines/${MACHINES[0].id}`, { method: 'PUT', body: { name: 'X', nominalRate: -1, parameters: [] } })).status).toBe(422);
+
+    const sig = signalsOf(MACHINES[0])[0];
+    const s = await call(`/telemetry-signals/${sig.id}`, { method: 'PUT', body: { name: 'Скорость 2', valueType: 'DOUBLE', signalKind: 'GAUGE', semanticCode: 'SPEED', featured: true } });
+    expect(validate('TelemetrySignal', s.json)).toEqual([]);
+    expect(s.json.name).toBe('Скорость 2');
+    const off = await call(`/telemetry-signals/${sig.id}/status`, { method: 'PUT', body: { status: 'DISABLED' } });
+    expect(off.json.status).toBe('DISABLED');
+
+    const parent = await call(`/machines/${MACHINES[0].id}/components`, { method: 'POST', body: { code: 'MOTOR_A', name: 'Мотор', kind: 'MOTOR', sortOrder: 0, parameters: [] } });
+    const child = await call(`/machines/${MACHINES[0].id}/components`, { method: 'POST', body: { code: 'BEARING_A', name: 'Подшипник', kind: 'BEARING', sortOrder: 0, parameters: [], parentComponentId: parent.json.id } });
+    expect(validate('Component', child.json)).toEqual([]);
+    const cycle = await call(`/components/${parent.json.id}/parent`, { method: 'PUT', body: { parentComponentId: child.json.id } });
+    expect(cycle.status).toBe(409);
+    const off2 = await call(`/components/${child.json.id}/status`, { method: 'PUT', body: { status: 'DISABLED' } });
+    expect(off2.json.status).toBe('DISABLED');
+    const active = await call(`/machines/${MACHINES[0].id}/components?status=ACTIVE`);
+    expect(active.json.items.map((c: { code: string }) => c.code)).toEqual(['MOTOR_A']);
   });
 });

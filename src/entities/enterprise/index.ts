@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { api, type Enterprise, type EquipmentTreeMachine } from '@/shared/api';
+import { useEnterpriseChoice } from '@/shared/model';
 import type { ShiftDef } from '@/shared/lib';
 
 export type { Enterprise };
@@ -15,7 +16,8 @@ export interface TreeLine {
 
 export function useEnterpriseTree() {
   const ents = useQuery(api.enterprises());
-  const enterprise = ents.data?.items[0];
+  const chosen = useEnterpriseChoice((s) => s.id);
+  const enterprise = ents.data?.items.find((e) => e.id === chosen) ?? ents.data?.items[0];
   const id = enterprise?.id ?? '';
   const tree = useQuery({ ...api.equipmentTree(id), enabled: !!id });
   const shiftsQ = useQuery({ ...api.shifts(id), enabled: !!id });

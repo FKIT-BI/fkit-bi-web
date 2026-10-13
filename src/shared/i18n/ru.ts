@@ -3,6 +3,7 @@ export const ru = {
   nav: {
     overview: 'Обзор предприятия',
     incidents: 'Журнал инцидентов',
+    generator: 'Генерация данных',
     admin: 'Администрирование',
     search: 'Поиск машины',
     nothingFound: 'Ничего не найдено',

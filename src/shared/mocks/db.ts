@@ -2,6 +2,7 @@ import type { components } from '../api/generated/analytics';
 import { isLoss, type StateCode } from '../config/states';
 import { addDaysToDate, DAY, dayStartMs, localDate, toIso } from '../lib/time';
 import { MOCK_CONFIG } from './config';
+import { registerPersisted, replaceArray, replaceMap, savePersisted } from './persist';
 import { ENTERPRISE, LINES, LOSS_REASONS, MACHINES, SHIFTS, signalsOf, type MockMachine } from './fixtures';
 import { generateDay, type GenInterval } from './generate/day';
 
@@ -35,15 +36,6 @@ export interface MockInterval {
 }
 
 const clone = <T>(v: T): T => structuredClone(v);
-
-function loadIncidents(): MockIncident[] {
-  try {
-    const raw = localStorage.getItem(MOCK_CONFIG.persistKey);
-    return raw ? (JSON.parse(raw).incidents ?? []) : [];
-  } catch {
-    return [];
-  }
-}
 
 const fromGen = (g: GenInterval): MockInterval => ({
   machineId: g.machineId,
@@ -93,14 +85,17 @@ export const db = {
   lines: clone(LINES),
   machines: clone(MACHINES),
   reasons: clone(LOSS_REASONS),
-  incidents: loadIncidents(),
+  incidents: [] as MockIncident[],
   days: new Map<string, GenInterval[]>(),
   components: new Map<string, S['Component'][]>(),
   createdSignals: new Map<string, S['TelemetrySignal'][]>(),
+  signalPatches: new Map<string, Partial<S['TelemetrySignal']>>(),
   stateConfigs: new Map<string, S['MachineStateConfiguration']>(),
 
   signals(m: MockMachine): S['TelemetrySignal'][] {
-    return [...(m.custom ? [] : signalsOf(m)), ...(db.createdSignals.get(m.id) ?? [])];
+    return [...(m.custom ? [] : signalsOf(m)), ...(db.createdSignals.get(m.id) ?? [])].map((x) =>
+      db.signalPatches.has(x.id) ? { ...x, ...db.signalPatches.get(x.id) } : x,
+    );
   },
 
   hasStateConfig(m: MockMachine) {
@@ -114,11 +109,7 @@ export const db = {
     return dayStartMs(localDate(now - MOCK_CONFIG.historyDays * DAY, tz), tz);
   },
 
-  persist() {
-    try {
-      localStorage.setItem(MOCK_CONFIG.persistKey, JSON.stringify({ incidents: db.incidents }));
-    } catch {}
-  },
+  persist: savePersisted,
 
   machine(id: string) {
     const m = db.machines.find((x) => x.id === id);
@@ -176,3 +167,32 @@ export const db = {
     return out;
   },
 };
+
+registerPersisted('core', {
+  save: () => ({
+    enterprises: db.enterprises,
+    shifts: db.shifts,
+    lines: db.lines,
+    machines: db.machines,
+    reasons: db.reasons,
+    incidents: db.incidents,
+    components: [...db.components],
+    createdSignals: [...db.createdSignals],
+    signalPatches: [...db.signalPatches],
+    stateConfigs: [...db.stateConfigs],
+  }),
+  load: (v) => {
+    const s = v as Record<string, unknown>;
+    replaceArray(db.enterprises, s.enterprises);
+    replaceArray(db.shifts, s.shifts);
+    replaceArray(db.lines, s.lines);
+    replaceArray(db.machines, s.machines);
+    replaceArray(db.reasons, s.reasons);
+    replaceArray(db.incidents, s.incidents);
+    replaceMap(db.components, s.components);
+    replaceMap(db.createdSignals, s.createdSignals);
+    replaceMap(db.signalPatches, s.signalPatches);
+    replaceMap(db.stateConfigs, s.stateConfigs);
+    db.days.clear();
+  },
+});
