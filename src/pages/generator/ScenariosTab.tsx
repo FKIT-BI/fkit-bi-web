@@ -1,7 +1,7 @@
 import { ActionIcon, Badge, Button, Group, Stack, Switch, Table, Text, TextInput, Tooltip } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { IconPencil, IconPlayerPlay, IconPlus, IconPower, IconSearch } from '@tabler/icons-react';
+import { IconCopy, IconPencil, IconPlayerPlay, IconPlus, IconPower, IconSearch } from '@tabler/icons-react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useEnterpriseTree } from '@/entities/enterprise';
@@ -9,6 +9,7 @@ import { ApiError, gen, gk, type ScenarioSummary } from '@/shared/api';
 import { formatDateTime } from '@/shared/lib';
 import { canAdminister, useUiStore } from '@/shared/model';
 import { Panel } from '@/shared/ui';
+import { CopyScenarioModal } from './CopyScenarioModal';
 import { CYCLE_MODE } from './labels';
 import { RunModal } from './RunModal';
 import { ScenarioEditor } from './ScenarioEditor';
@@ -23,6 +24,7 @@ export function ScenariosTab({ onRunCreated }: { onRunCreated: (runId: string) =
   const [debounced] = useDebouncedValue(search, 300);
   const [editor, setEditor] = useState<{ id: string | null } | null>(null);
   const [runFor, setRunFor] = useState<string | null>(null);
+  const [copyOf, setCopyOf] = useState<ScenarioSummary | null>(null);
 
   const q = useQuery({ ...gen.scenarios(enterpriseId, showDisabled ? 'DISABLED' : 'ACTIVE', debounced.trim() || undefined), enabled: !!enterpriseId, placeholderData: keepPreviousData });
   const toggle = useMutation({
@@ -81,6 +83,9 @@ export function ScenariosTab({ onRunCreated }: { onRunCreated: (runId: string) =
                         <Tooltip label="Редактировать"><ActionIcon variant="subtle" onClick={() => setEditor({ id: s.id })} aria-label="Редактировать"><IconPencil size={16} /></ActionIcon></Tooltip>
                       )}
                       {admin && (
+                        <Tooltip label="Копировать"><ActionIcon variant="subtle" onClick={() => setCopyOf(s)} aria-label="Копировать"><IconCopy size={16} /></ActionIcon></Tooltip>
+                      )}
+                      {admin && (
                         <Tooltip label={s.status === 'ACTIVE' ? 'Отключить' : 'Активировать'}>
                           <ActionIcon variant="subtle" color={s.status === 'ACTIVE' ? 'gray' : 'blue'} loading={toggle.isPending && toggle.variables?.id === s.id} onClick={() => toggle.mutate(s)} aria-label="Статус"><IconPower size={16} /></ActionIcon>
                         </Tooltip>
@@ -95,6 +100,15 @@ export function ScenariosTab({ onRunCreated }: { onRunCreated: (runId: string) =
       </Panel>
       {!admin && <Text size="xs" c="dimmed">Редактирование доступно роли «Администратор» (переключатель в шапке).</Text>}
       <ScenarioEditor scenarioId={editor?.id ?? null} opened={!!editor} onClose={() => setEditor(null)} />
+      <CopyScenarioModal
+        source={copyOf}
+        onClose={() => setCopyOf(null)}
+        onCopied={(created) => {
+          setCopyOf(null);
+          setShowDisabled(true);
+          setEditor({ id: created.id });
+        }}
+      />
       <RunModal opened={!!runFor} scenarioId={runFor ?? undefined} onClose={() => setRunFor(null)} onCreated={onRunCreated} />
     </Stack>
   );

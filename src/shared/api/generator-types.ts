@@ -6,6 +6,7 @@ export type ScenarioSummary = G['ScenarioSummary'];
 export type ScenarioDetail = G['ScenarioDetail'];
 export type ScenarioCreate = G['ScenarioCreate'];
 export type ScenarioUpdate = G['ScenarioUpdate'];
+export type ScenarioCopy = G['ScenarioCopy'];
 export type ScenarioValidationResult = G['ScenarioValidationResult'];
 export type GenValidationIssue = G['ValidationIssue'];
 export type MachineTargetInput = G['MachineTargetInput'];

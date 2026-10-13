@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
 import { generatorClient as G, unwrap } from './client';
-import type { GeneratorStatus, GenerationRunDetail, RunCreate, RunMode, RunStatus, ScenarioCreate, ScenarioUpdate } from './generator-types';
+import type { GeneratorStatus, GenerationRunDetail, RunCreate, RunMode, RunStatus, ScenarioCopy, ScenarioCreate, ScenarioUpdate } from './generator-types';
 
 export const gk = {
   scenarios: ['generator', 'scenarios'] as const,
@@ -34,6 +34,8 @@ export const gen = {
     unwrap(G.PUT('/scenarios/{scenarioId}', { params: { path: { scenarioId } }, body })),
   setScenarioStatus: (scenarioId: string, status: GeneratorStatus) =>
     unwrap(G.PUT('/scenarios/{scenarioId}/status', { params: { path: { scenarioId } }, body: { status } })),
+  copyScenario: (scenarioId: string, body: ScenarioCopy) =>
+    unwrap(G.POST('/scenarios/{scenarioId}/copy', { params: { path: { scenarioId } }, body })),
   validateScenario: (body: ScenarioCreate) => unwrap(G.POST('/scenarios/validate', { body })),
 
   runs: (enterpriseId: string, f: RunFilters = {}, refetchMs: number | false = false) =>

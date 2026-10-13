@@ -394,6 +394,27 @@ export const generatorHandlers = [
     Object.assign(s, { name: b.name, description: b.description ?? null, cycleMode: b.cycleMode, machineTargets: b.machineTargets, phases: b.phases, validation, updatedAt: iso(Date.now()) });
     return HttpResponse.json(s);
   }),
+  route('post', '/scenarios/:scenarioId/copy', async ({ params, request }) => {
+    const source = scenarios.find((x) => x.id === params.scenarioId);
+    if (!source) return notFound('Сценарий');
+    const b = await body(request);
+    const errors = checkScenarioHeader({ ...b, enterpriseId: source.enterpriseId, cycleMode: source.cycleMode }, true);
+    if (errors.length) return invalid(errors);
+    if (scenarios.some((s) => s.enterpriseId === source.enterpriseId && s.code === b.code)) return conflict('DUPLICATE_CODE', 'Сценарий с таким кодом уже есть');
+    const copy: G['ScenarioDetail'] = {
+      ...structuredClone(source),
+      id: crypto.randomUUID(),
+      code: b.code,
+      name: b.name,
+      description: b.description ?? source.description ?? null,
+      status: 'DISABLED',
+      validation: validateScenario(source),
+      createdAt: iso(Date.now()),
+      updatedAt: iso(Date.now()),
+    };
+    scenarios.push(copy);
+    return HttpResponse.json(copy, { status: 201 });
+  }),
   route('put', '/scenarios/:scenarioId/status', async ({ params, request }) => {
     const s = scenarios.find((x) => x.id === params.scenarioId);
     if (!s) return notFound('Сценарий');
