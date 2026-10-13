@@ -1,29 +1,75 @@
 {
   "name": "fkit-bi-web",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:local": "vite --mode backend-local",
+    "dev:stand": "vite --mode stand",
     "build": "tsc -b && vite build",
+    "preview": "vite preview",
     "typecheck": "tsc -b --pretty false",
+    "lint": "eslint .",
     "test": "vitest run",
-    "generate:api": "openapi-typescript ../fkit-bi-analytics/docs/contracts/analytics-api-draft.yaml -o src/api/analytics.generated.ts && openapi-typescript ../fkit-bi-infra/docs/contracts/auth-api.yaml -o src/api/auth.generated.ts"
+    "api:sync": "curl -fsS -o openapi/analytics-api.yaml https://bi.kitexp.ru/api/analytics/openapi/analytics-api-draft.yaml && curl -fsS -o openapi/generator-api.yaml https://generator.bi.kitexp.ru/openapi/generator-api-draft.yaml",
+    "api:generate": "openapi-typescript openapi/analytics-api.yaml -o src/shared/api/generated/analytics.ts && openapi-typescript openapi/generator-api.yaml -o src/shared/api/generated/generator.ts",
+    "generate:api": "npm run api:generate"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "vite": "latest"
+    "@hookform/resolvers": "^5.9.1",
+    "@mantine/core": "^9.6.3",
+    "@mantine/dates": "^9.6.3",
+    "@mantine/hooks": "^9.6.3",
+    "@mantine/notifications": "^9.6.3",
+    "@tabler/icons-react": "^3.48.0",
+    "@tanstack/react-query": "^5.104.0",
+    "@tanstack/react-router": "^1.170.40",
+    "@tanstack/react-table": "^8.21.3",
+    "dayjs": "^1.11.23",
+    "echarts": "^6.1.0",
+    "i18next": "^26.4.2",
+    "openapi-fetch": "^0.17.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-hook-form": "^7.89.0",
+    "react-i18next": "^17.0.15",
+    "zod": "^4.6.5",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@testing-library/react": "^16.3.3",
-    "@testing-library/user-event": "^14.6.7",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "jsdom": "^26.1.0",
+    "@testing-library/user-event": "^14.6.8",
+    "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^2.1.1",
+    "eslint": "^10.11.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
+    "jsdom": "^29.1.1",
+    "msw": "^2.15.0",
     "openapi-typescript": "^7.13.0",
-    "typescript": "latest",
-    "vitest": "^5.0.3"
+    "postcss": "^8.5.28",
+    "postcss-preset-mantine": "^1.18.0",
+    "postcss-simple-vars": "^7.0.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.0",
+    "vite": "^8.3.1",
+    "vitest": "^4.1.11",
+    "yaml": "^2.9.1"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
+  },
+  "overrides": {
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
   }
 }
