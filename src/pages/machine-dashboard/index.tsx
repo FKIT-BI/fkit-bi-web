@@ -14,5 +14,5 @@ export const machineDashboard: DashboardConfig = {
 
 export default function MachineDashboardPage() {
   const { machineId } = useParams({ strict: false }) as { machineId: string };
-  return <Dashboard key={machineId} config={machineDashboard} ctx={{ scope: 'machine', id: machineId, machineId }} />;
+  return <Dashboard key={machineId} config={machineDashboard} ctx={{ scope: 'MACHINE', id: machineId, machineId }} />;
 }

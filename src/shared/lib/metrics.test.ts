@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clipToWindows, computeMetrics, lossesByReason, pareto, type TimeInterval } from './metrics';
+import { clipToWindows, combineMetrics, computeMetrics, lossesByReason, type TimeInterval } from './metrics';
 
 const M = 60_000;
 const seq: TimeInterval[] = [
@@ -12,26 +12,28 @@ const seq: TimeInterval[] = [
 ];
 
 describe('computeMetrics', () => {
-  it('считает время по категориям, остановки, A, MTBF/MTTR', () => {
-    const now = 160 * M;
-    const pieces = clipToWindows(seq, [{ from: 0, to: 180 * M }], now);
-    const m = computeMetrics(pieces, 160 * 60, { nominalRate: 60, output: 90 });
+  it('считает время по состояниям, остановки, A, P, MTBF/MTTR', () => {
+    const pieces = clipToWindows(seq, [{ from: 0, to: 180 * M }], 160 * M);
+    const m = computeMetrics(pieces, 160 * 60, { output: 90, idealOutput: 110 });
     expect(m.runSec).toBe(110 * 60);
-    expect(m.unplannedSec).toBe(20 * 60);
-    expect(m.plannedSec).toBe(30 * 60);
-    expect(m.offlineSec).toBe(0);
-    expect(m.stops).toBe(2);
+    expect(m.idleSec + m.downSec).toBe(20 * 60);
+    expect(m.plannedStopSec).toBe(30 * 60);
+    expect(m.effectiveOfflineSec).toBe(0);
+    expect(m.stopCount).toBe(2);
+    expect(m.failureCount).toBe(1);
+    expect(m.recoveryCount).toBe(1);
     expect(m.availability).toBeCloseTo(110 / 130);
-    expect(m.performance).toBeCloseTo(90 / (60 * (110 / 60)));
-    expect(m.mtbfMin).toBe(55);
-    expect(m.mttrMin).toBe(5);
+    expect(m.performance).toBeCloseTo(90 / 110);
+    expect(m.mtbfSec).toBe(110 * 60);
+    expect(m.mttrSec).toBe(10 * 60);
   });
 
-  it('непокрытое время считается «нет данных»', () => {
+  it('непокрытое время — нет данных', () => {
     const pieces = clipToWindows(seq.slice(0, 1), [{ from: 0, to: 120 * M }], 200 * M);
     const m = computeMetrics(pieces, 120 * 60);
-    expect(m.offlineSec).toBe(60 * 60);
+    expect(m.effectiveOfflineSec).toBe(60 * 60);
     expect(m.availability).toBe(1);
+    expect(m.dataCoverage).toBe(0.5);
   });
 
   it('окна смен обрезают интервалы', () => {
@@ -42,14 +44,22 @@ describe('computeMetrics', () => {
       ['RUN', 70, 75],
     ]);
   });
+
+  it('агрегат по машинам пересчитывает отношения из сумм', () => {
+    const a = computeMetrics(clipToWindows(seq, [{ from: 0, to: 140 * M }], 1e9), 140 * 60, { output: 50, idealOutput: 100 });
+    const b = computeMetrics(clipToWindows(seq.slice(0, 1), [{ from: 0, to: 60 * M }], 1e9), 60 * 60, { output: 60, idealOutput: 60 });
+    const c = combineMetrics([a, b]);
+    expect(c.runSec).toBe(a.runSec + b.runSec);
+    expect(c.performance).toBeCloseTo(110 / 160);
+  });
 });
 
-describe('pareto', () => {
-  it('сортирует причины и считает накопленную долю, без причины — unknown', () => {
+describe('lossesByReason', () => {
+  it('группирует потери, без причины — null', () => {
     const pieces = clipToWindows(seq, [{ from: 0, to: 200 * M }], 150 * M);
-    const rows = pareto(lossesByReason(pieces));
-    expect(rows.map((r) => r.reasonId)).toEqual(['lunch', 'r1', 'unknown']);
-    expect(rows.at(-1)!.cumShare).toBeCloseTo(1);
-    expect(rows[0].share).toBeCloseTo(0.6);
+    const m = lossesByReason(pieces);
+    expect(m.get('lunch')).toBe(30 * 60);
+    expect(m.get('r1')).toBe(10 * 60);
+    expect(m.get(null)).toBe(10 * 60);
   });
 });

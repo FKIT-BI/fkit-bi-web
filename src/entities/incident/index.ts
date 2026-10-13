@@ -1,1 +1,1 @@
-export type { Incident, IncidentInput } from '@/shared/api';
+export type { ManualIncident, ManualIncidentCreate, ManualStateOverride } from '@/shared/api';

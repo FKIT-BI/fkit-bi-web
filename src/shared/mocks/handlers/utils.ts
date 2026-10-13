@@ -1,37 +1,71 @@
-import { delay, HttpResponse } from 'msw';
-import type { z } from 'zod';
+import { delay, http, HttpResponse, type DefaultBodyType, type PathParams } from 'msw';
 import { MOCK_CONFIG } from '../config';
+
+export const BASE = '*/api/analytics/api/v1';
 
 export const latency = () => {
   const [a, b] = MOCK_CONFIG.latencyMs;
   return delay(a + Math.random() * (b - a));
 };
 
-export function mockError(request: Request) {
-  const flag = (u: string) => new URL(u, 'http://localhost').searchParams.get('mockError') === '1';
-  if (flag(request.url) || (typeof location !== 'undefined' && flag(location.href))) {
-    return HttpResponse.json({ message: 'Mock error (mockError=1)' }, { status: 500 });
-  }
-  return null;
+export function apiError(status: number, code: string, message: string, fieldErrors: Array<{ path: string; code: string; message: string }> = []) {
+  return HttpResponse.json(
+    { code, message, traceId: crypto.randomUUID(), fieldErrors, details: {} },
+    { status },
+  );
 }
+
+export const notFound = (what: string) => apiError(404, 'NOT_FOUND', `${what} не найден`);
+export const badRequest = (message: string, fieldErrors: Array<{ path: string; code: string; message: string }> = []) =>
+  apiError(400, 'BAD_REQUEST', message, fieldErrors);
+
+const mockErrorFlag = (request: Request) => {
+  const flag = (u: string) => new URL(u, 'http://localhost').searchParams.get('mockError') === '1';
+  return flag(request.url) || (typeof location !== 'undefined' && flag(location.href));
+};
 
 export function query(request: Request) {
   const sp = new URL(request.url).searchParams;
+  const str = (k: string) => sp.get(k) ?? undefined;
   const time = (k: string) => {
     const v = sp.get(k);
-    return v ? Date.parse(v) : undefined;
+    if (v == null) return undefined;
+    const t = Date.parse(v);
+    return Number.isNaN(t) ? NaN : t;
   };
-  return { sp, time, str: (k: string) => sp.get(k) ?? undefined };
+  const int = (k: string, def: number) => {
+    const v = sp.get(k);
+    return v == null ? def : Number.parseInt(v, 10);
+  };
+  const bool = (k: string) => sp.get(k) === 'true';
+  return { sp, str, time, int, bool };
 }
 
-export const notFound = (what: string) => HttpResponse.json({ message: `${what} не найден` }, { status: 404 });
-export const badRequest = (message: string) => HttpResponse.json({ message }, { status: 400 });
-
-export async function parseBody<S extends z.ZodType>(request: Request, schema: S) {
-  const res = schema.safeParse(await request.json().catch(() => undefined));
-  if (res.success) return { data: res.data as z.output<S>, error: null };
-  const msg = res.error.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`).join('; ');
-  return { data: null, error: badRequest(msg) };
+export function page<T>(items: T[], request: Request) {
+  const q = query(request);
+  const number = Math.max(0, q.int('page', 0));
+  const size = Math.min(200, Math.max(1, q.int('size', 50)));
+  return {
+    items: items.slice(number * size, number * size + size),
+    page: { number, size, totalElements: items.length, totalPages: Math.ceil(items.length / size) },
+  };
 }
 
-export const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
+export const byStatus = <T extends { status: string }>(items: T[], request: Request) => {
+  const status = query(request).str('status') ?? 'ACTIVE';
+  return items.filter((i) => i.status === status);
+};
+
+type Method = 'get' | 'post' | 'put' | 'delete';
+type Resolver = (args: { request: Request; params: PathParams }) => Response | Promise<Response>;
+
+export function route(method: Method, path: string, resolve: Resolver, opts: { auth?: boolean; failable?: boolean } = {}) {
+  return http[method]<PathParams, DefaultBodyType>(`${BASE}${path}`, async ({ request, params }) => {
+    await latency();
+    if (opts.auth !== false && !request.headers.get('Authorization')?.startsWith('Bearer ')) {
+      return apiError(401, 'AUTHENTICATION_FAILED', 'Authentication failed');
+    }
+    if (opts.failable && mockErrorFlag(request)) return apiError(500, 'INTERNAL_ERROR', 'Mock error (mockError=1)');
+    return resolve({ request, params });
+  });
+}

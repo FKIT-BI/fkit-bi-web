@@ -1,10 +1,8 @@
-import { DAY, HOUR, dayjs } from './time';
-import { DEFAULT_SHIFTS, shiftAt, type ShiftDef } from './shifts';
+import { HOUR, dayjs } from './time';
+import { getAppShifts, shiftAt, type ShiftDef } from './shifts';
 
 export const PERIOD_PRESETS = ['shift', 'today', 'yesterday', '7d', '30d', 'custom'] as const;
 export type PeriodPreset = (typeof PERIOD_PRESETS)[number];
-
-export type Bucket = 'hour' | 'shift' | 'day';
 
 export interface Period {
   from: number;
@@ -16,7 +14,7 @@ export function resolvePeriod(
   now: number,
   tz: string,
   custom?: { from?: number; to?: number },
-  shifts: ShiftDef[] = DEFAULT_SHIFTS,
+  shifts: ShiftDef[] = getAppShifts(),
 ): Period {
   const today = dayjs(now).tz(tz).startOf('day');
   switch (preset) {
@@ -38,13 +36,6 @@ export function resolvePeriod(
       return { from, to };
     }
   }
-}
-
-export function bucketFor(p: Period): Bucket {
-  const len = p.to - p.from;
-  if (len <= 1.5 * DAY) return 'hour';
-  if (len <= 8 * DAY) return 'shift';
-  return 'day';
 }
 
 export const previousPeriod = (p: Period): Period => ({ from: 2 * p.from - p.to, to: p.from });

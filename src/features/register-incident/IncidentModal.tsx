@@ -1,35 +1,44 @@
 import { Alert, Button, Checkbox, Group, Modal, Select, SimpleGrid, Stack, Textarea } from '@mantine/core';
-import { useMediaQuery } from '@mantine/hooks';
 import { DateTimePicker } from '@mantine/dates';
+import { useMediaQuery } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { IconAlertTriangle } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { useEnterpriseTree } from '@/entities/enterprise';
 import { useReasons } from '@/entities/loss-reason';
-import { api, qk } from '@/shared/api';
+import { api, ApiError, qk, type ManualIncidentCreate } from '@/shared/api';
 import { useTranslation } from '@/shared/i18n';
-import { formatDateTime, parseLocal, toIso, toLocalString, MINUTE } from '@/shared/lib';
-import { USER_BY_ROLE, useUiStore } from '@/shared/model';
+import { formatDateTime, MINUTE, parseLocal, toIso, toLocalString } from '@/shared/lib';
+import { useAuth } from '@/shared/model';
 import { useIncidentModal } from './model';
 import { incidentFormSchema, type IncidentForm } from './schema';
+
+const FIELD_MAP: Record<string, keyof IncidentForm> = {
+  from: 'from',
+  to: 'to',
+  lossReasonId: 'reasonId',
+  stateOverride: 'stateOverride',
+  comment: 'comment',
+};
 
 export function IncidentModal() {
   const { t } = useTranslation();
   const { opened, draft, close } = useIncidentModal();
-  const role = useUiStore((s) => s.role);
+  const user = useAuth((s) => s.user);
   const tree = useEnterpriseTree();
   const reasons = useReasons();
   const qc = useQueryClient();
   const isMobile = useMediaQuery('(max-width: 36em)');
+  const idempotencyKey = useMemo(() => (opened ? crypto.randomUUID() : ''), [opened]);
 
   const form = useForm<IncidentForm>({
     resolver: zodResolver(incidentFormSchema),
-    defaultValues: { machineId: '', from: '', to: null, ongoing: false, reasonId: '', comment: '' },
+    defaultValues: { machineId: '', from: '', to: null, ongoing: false, reasonId: '', stateOverride: '', comment: '' },
   });
-  const { control, handleSubmit, reset, register, formState } = form;
+  const { control, handleSubmit, reset, register, formState, setError } = form;
 
   useEffect(() => {
     if (!opened) return;
@@ -40,6 +49,7 @@ export function IncidentModal() {
       to: draft.to === null ? null : toLocalString(draft.to ?? now),
       ongoing: draft.to === null,
       reasonId: draft.reasonId ?? '',
+      stateOverride: draft.stateOverride ?? '',
       comment: '',
     });
   }, [opened, draft, reset]);
@@ -49,30 +59,38 @@ export function IncidentModal() {
   const toMs = ongoing ? Date.now() : to ? parseLocal(to) : undefined;
 
   const overlaps = useQuery({
-    ...api.incidents({ machineId, from: fromMs, to: toMs }),
+    ...api.machineIncidents(machineId, { from: fromMs ?? 0, to: toMs ?? 0 }),
     enabled: opened && !!machineId && fromMs != null && toMs != null && toMs > fromMs,
   });
 
   const save = useMutation({
-    mutationFn: (v: IncidentForm) =>
-      api.createIncident({
-        machineId: v.machineId,
-        from: toIso(parseLocal(v.from)),
-        to: v.ongoing || !v.to ? null : toIso(parseLocal(v.to)),
-        reasonId: v.reasonId,
-        comment: v.comment,
-        author: USER_BY_ROLE[role],
-      }),
+    mutationFn: (v: IncidentForm) => {
+      const exact = (value: string, original: number | null | undefined) =>
+        original != null && value === toLocalString(original) ? original : parseLocal(value);
+      const body: ManualIncidentCreate = {
+        from: toIso(exact(v.from, draft.from)),
+        to: v.ongoing || !v.to ? null : toIso(exact(v.to, draft.to)),
+        stateOverride: v.stateOverride || null,
+        lossReasonId: v.reasonId || null,
+        comment: v.comment || null,
+        author: user?.displayName ?? null,
+      };
+      return api.createIncident(v.machineId, body, idempotencyKey);
+    },
     onSuccess: async () => {
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: qk.analytics }),
-        qc.invalidateQueries({ queryKey: qk.intervals }),
-        qc.invalidateQueries({ queryKey: qk.incidents }),
-      ]);
+      await Promise.all([qk.analytics, qk.intervals, qk.incidents, qk.operations].map((queryKey) => qc.invalidateQueries({ queryKey })));
       notifications.show({ color: 'green', message: t('incident.saved') });
       close();
     },
-    onError: (e) => notifications.show({ color: 'red', message: e instanceof Error ? e.message : String(e) }),
+    onError: (e) => {
+      if (e instanceof ApiError) {
+        for (const fe of e.fieldErrors) {
+          const field = FIELD_MAP[fe.path];
+          if (field) setError(field, { message: fe.message });
+        }
+      }
+      notifications.show({ color: 'red', message: e instanceof Error ? e.message : String(e) });
+    },
   });
 
   const err = (name: keyof IncidentForm) => {
@@ -80,15 +98,13 @@ export function IncidentModal() {
     return m ? t(m) : undefined;
   };
 
-  const machineOptions = tree.lines.map((l) => ({
-    group: l.name,
-    items: l.machines.map((m) => ({ value: m.id, label: m.name })),
+  const machineOptions = tree.lines.map((l) => ({ group: l.name, items: l.machines.map((m) => ({ value: m.id, label: m.name })) }));
+  const categories = [...new Set(reasons.list.map((r) => r.category))];
+  const reasonOptions = categories.map((c) => ({
+    group: t(`category.${c}`),
+    items: reasons.list.filter((r) => r.category === c).map((r) => ({ value: r.id, label: r.name })),
   }));
-  const groups = [...new Set(reasons.list.map((r) => r.group))];
-  const reasonOptions = groups.map((g) => ({
-    group: g,
-    items: reasons.list.filter((r) => r.group === g).map((r) => ({ value: r.id, label: r.name })),
-  }));
+  const others = (overlaps.data ?? []).filter((i) => !i.cancelledAt);
 
   return (
     <Modal opened={opened} onClose={close} title={t('incident.title')} size="lg" fullScreen={isMobile}>
@@ -132,26 +148,47 @@ export function IncidentModal() {
             />
           </SimpleGrid>
           <Checkbox label={t('incident.ongoing')} {...register('ongoing')} />
-          <Controller
-            control={control}
-            name="reasonId"
-            render={({ field }) => (
-              <Select label={t('incident.reason')} data={reasonOptions} searchable required error={err('reasonId')} {...field} />
-            )}
-          />
+          <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
+            <Controller
+              control={control}
+              name="reasonId"
+              render={({ field }) => (
+                <Select label={t('incident.reason')} data={reasonOptions} searchable clearable error={err('reasonId')} {...field} onChange={(v) => field.onChange(v ?? '')} />
+              )}
+            />
+            <Controller
+              control={control}
+              name="stateOverride"
+              render={({ field }) => (
+                <Select
+                  label={t('incident.stateOverride')}
+                  data={[
+                    { value: '', label: t('incident.noOverride') },
+                    { value: 'SETUP', label: t('state.SETUP') },
+                    { value: 'PLANNED_STOP', label: t('state.PLANNED_STOP') },
+                  ]}
+                  allowDeselect={false}
+                  error={err('stateOverride')}
+                  {...field}
+                  onChange={(v) => field.onChange(v ?? '')}
+                />
+              )}
+            />
+          </SimpleGrid>
           <Textarea
             label={t('incident.comment')}
             autosize
             minRows={2}
             maxLength={500}
+            error={err('comment')}
             description={`${form.watch('comment')?.length ?? 0} / 500`}
             {...register('comment')}
           />
-          {!!overlaps.data?.length && (
+          {!!others.length && (
             <Alert color="yellow" icon={<IconAlertTriangle size={16} />}>
               {t('incident.overlap', {
-                list: overlaps.data
-                  .map((i) => `${formatDateTime(i.from)}–${i.to ? formatDateTime(i.to) : '…'} (${reasons.nameOf(i.reasonId)})`)
+                list: others
+                  .map((i) => `${formatDateTime(Date.parse(i.from))}–${i.to ? formatDateTime(Date.parse(i.to)) : '…'} (${i.lossReason?.name ?? (i.stateOverride ? t(`state.${i.stateOverride}`) : '—')})`)
                   .join('; '),
               })}
             </Alert>

@@ -4,7 +4,7 @@ import { useElementSize } from '@mantine/hooks';
 import { useMemo } from 'react';
 import { useEnterpriseTree } from '@/entities/enterprise';
 import { usePeriod } from '@/features/period-filter';
-import { api, type Summary } from '@/shared/api';
+import { api, type AnalyticsSummary } from '@/shared/api';
 import { STATE_META } from '@/shared/config';
 import { useTranslation } from '@/shared/i18n';
 import { formatPercent } from '@/shared/lib';
@@ -16,7 +16,7 @@ export function MachineRating(_: { ctx: PanelContext }) {
   const tree = useEnterpriseTree();
   const navigate = useNavigate();
   const qs = useQueries({
-    queries: tree.machines.map((m) => ({ ...api.summary('machine', m.id, period.params), placeholderData: (p: Summary | undefined) => p })),
+    queries: tree.machines.map((m) => ({ ...api.summary('MACHINE', m.id, period.params), placeholderData: (p: AnalyticsSummary | undefined) => p })),
   });
   const dataKey = qs.map((q) => q.dataUpdatedAt).join();
 
@@ -24,15 +24,15 @@ export function MachineRating(_: { ctx: PanelContext }) {
     () =>
       tree.machines
         .map((m, i) => {
-          const c = qs[i]?.data?.current;
-          const T = c?.calendarSec || 1;
+          const c = qs[i]?.data?.current.metrics;
+          const T = c?.coveredSec || 1;
           return {
             id: m.id,
             name: m.name,
             run: c ? c.runSec / T : 0,
-            unplanned: c ? c.unplannedSec / T : 0,
-            planned: c ? c.plannedSec / T : 0,
-            offline: c ? c.offlineSec / T : 0,
+            unplanned: c ? (c.idleSec + c.downSec) / T : 0,
+            planned: c ? (c.setupSec + c.plannedStopSec) / T : 0,
+            offline: c ? c.effectiveOfflineSec / T : 0,
           };
         })
         .sort((a, b) => a.run - b.run),

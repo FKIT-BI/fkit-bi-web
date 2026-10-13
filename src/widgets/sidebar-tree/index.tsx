@@ -55,7 +55,7 @@ export function SidebarTree() {
                   active={params.machineId === m.id}
                   label={
                     <Group gap={8} wrap="nowrap">
-                      <StateDot state={states.byMachine.get(m.id)?.stateCode} />
+                      <StateDot state={states.byMachine.get(m.id)?.effectiveState} />
                       <Text size="sm" truncate>
                         {m.name}
                       </Text>

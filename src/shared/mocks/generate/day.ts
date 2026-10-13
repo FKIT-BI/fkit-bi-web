@@ -1,7 +1,7 @@
 import type { StateCode } from '../../config/states';
 import { addDaysToDate, atLocal, dayjs, dayStartMs, HOUR, MINUTE } from '../../lib/time';
 import { MOCK_CONFIG } from '../config';
-import type { MockMachine } from '../fixtures';
+import { REASON_ID, type MockMachine, type ReasonKey } from '../fixtures';
 import { DURATION_LIMITS, PROFILES, type Profile } from './profiles';
 import { lognormal, randInt, seededRandom, weightedPick, type Rnd } from './random';
 
@@ -45,14 +45,14 @@ export function generateDay(machine: MockMachine, date: string, tz: string): Gen
     if (planned.some((p) => p.from < ev.to && ev.from < p.to)) return;
     planned.push(ev);
   };
-  place({ ...base, stateCode: 'PLANNED_STOP', from: at('00:00'), to: at('00:30'), reasonId: 'r-lunch' });
-  place({ ...base, stateCode: 'PLANNED_STOP', from: at('12:00'), to: at('12:30'), reasonId: 'r-lunch' });
+  place({ ...base, stateCode: 'PLANNED_STOP', from: at('00:00'), to: at('00:30'), reasonId: REASON_ID['r-lunch'] });
+  place({ ...base, stateCode: 'PLANNED_STOP', from: at('12:00'), to: at('12:30'), reasonId: REASON_ID['r-lunch'] });
   if (dayjs(date).day() === 3) {
-    place({ ...base, stateCode: 'PLANNED_STOP', from: at('14:00'), to: at('16:00'), reasonId: 'r-maintenance' });
+    place({ ...base, stateCode: 'PLANNED_STOP', from: at('14:00'), to: at('16:00'), reasonId: REASON_ID['r-maintenance'] });
   }
   if (rnd() < profile.setupRate) {
     const from = rnd() < 0.5 ? at('08:00') : at('20:00');
-    place({ ...base, stateCode: 'SETUP', from, to: from + randInt(rnd, 20, 60) * MINUTE, reasonId: 'r-setup' });
+    place({ ...base, stateCode: 'SETUP', from, to: from + randInt(rnd, 20, 60) * MINUTE, reasonId: REASON_ID['r-setup'] });
   }
   if (rnd() < profile.offlineRate) {
     const from = d0 + randInt(rnd, 1, 21) * HOUR + randInt(rnd, 0, 59) * MINUTE;
@@ -66,7 +66,7 @@ export function generateDay(machine: MockMachine, date: string, tz: string): Gen
   const fill = (gapFrom: number, gapTo: number) => {
     let state: 'RUN' | 'IDLE' | 'DOWN' = 'RUN';
     for (let cur = gapFrom; cur < gapTo; ) {
-      let dur = Math.min(sampleDuration(rnd, profile, state), gapTo - cur);
+      let dur = Math.min(Math.round(sampleDuration(rnd, profile, state) / 1000) * 1000, gapTo - cur);
       if (gapTo - (cur + dur) < MINUTE) dur = gapTo - cur;
       out.push({
         machineId: machine.id,
@@ -74,7 +74,7 @@ export function generateDay(machine: MockMachine, date: string, tz: string): Gen
         from: cur,
         to: cur + dur,
         reasonId:
-          state === 'RUN' ? null : rnd() < MOCK_CONFIG.labelRate ? weightedPick(rnd, weights![state]) : null,
+          state === 'RUN' ? null : rnd() < MOCK_CONFIG.labelRate ? REASON_ID[weightedPick(rnd, weights![state]) as ReasonKey] : null,
         speed: state === 'RUN' ? profile.perf + (rnd() - 0.5) * 0.1 : 0,
       });
       cur += dur;

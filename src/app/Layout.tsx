@@ -1,12 +1,12 @@
 import { AppShell, Center, Loader, Text } from '@mantine/core';
 import { useDisclosure, useHotkeys } from '@mantine/hooks';
-import { Outlet, useRouterState } from '@tanstack/react-router';
-import { useState } from 'react';
+import { Navigate, Outlet, useRouterState } from '@tanstack/react-router';
+import { useLayoutEffect, useState } from 'react';
 import { useEnterpriseTree } from '@/entities/enterprise';
 import { useAutoRefresh } from '@/features/auto-refresh';
 import { IncidentModal } from '@/features/register-incident';
-import { setAppTimezone } from '@/shared/lib';
-import { useDashboardSearch, useUiStore } from '@/shared/model';
+import { setAppShifts, setAppTimezone } from '@/shared/lib';
+import { useAppContext, useAuth, useDashboardSearch, useUiStore } from '@/shared/model';
 import { AppHeader } from '@/widgets/app-header';
 import { DashboardToolbar } from '@/widgets/dashboard-toolbar';
 import { SidebarTree } from '@/widgets/sidebar-tree';
@@ -19,6 +19,13 @@ export function Layout() {
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const [mobileOpened, mobile] = useDisclosure(false);
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const href = useRouterState({ select: (s) => s.location.href });
+  const token = useAuth((s) => s.token);
+  const { enterpriseId, setEnterpriseId } = useAppContext();
+  const treeEnterpriseId = tree.enterprise?.id ?? null;
+  useLayoutEffect(() => {
+    if (treeEnterpriseId !== enterpriseId) setEnterpriseId(treeEnterpriseId);
+  }, [treeEnterpriseId, enterpriseId, setEnterpriseId]);
   const kiosk = !!search.kiosk;
   useAutoRefresh();
   useHotkeys([['Escape', () => kiosk && update({ kiosk: undefined })]]);
@@ -28,14 +35,17 @@ export function Layout() {
     mobile.close();
   }
 
-  if (!tree.enterprise) {
+  if (!token) return <Navigate to="/login" search={{ redirect: href }} />;
+
+  if (!tree.isReady || enterpriseId !== tree.enterprise?.id) {
     return (
       <Center h="100vh">
-        {tree.isError ? <Text c="red">Не удалось загрузить предприятие</Text> : <Loader />}
+        {tree.isError ? <Text c="red">Не удалось загрузить предприятие: {tree.error?.message}</Text> : tree.isLoading || tree.enterprise ? <Loader /> : <Text c="dimmed">Нет доступных предприятий</Text>}
       </Center>
     );
   }
-  setAppTimezone(tree.enterprise.timezone);
+  setAppTimezone(tree.timezone ?? tree.enterprise.timezone);
+  setAppShifts(tree.shifts);
 
   return (
     <AppShell

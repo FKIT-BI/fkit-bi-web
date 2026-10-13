@@ -20,7 +20,7 @@ describe('generateDay', () => {
 
   it('профили дают разную долю RUN', () => {
     const share = (id: string) => {
-      const m = MACHINES.find((x) => x.id === id)!;
+      const m = MACHINES.find((x) => x.code === id)!;
       let run = 0;
       let total = 0;
       for (let d = 1; d <= 28; d++) {
@@ -31,9 +31,9 @@ describe('generateDay', () => {
       }
       return run / total;
     };
-    const stable = share('m-101');
-    const problem = share('m-102');
-    console.log({ stable, average: share('m-104'), problem });
+    const stable = share('EXTRUDER_1');
+    const problem = share('EXTRUDER_2');
+    console.log({ stable, average: share('WINDER_1'), problem });
     expect(stable).toBeGreaterThan(0.78);
     expect(problem).toBeLessThan(0.65);
   });

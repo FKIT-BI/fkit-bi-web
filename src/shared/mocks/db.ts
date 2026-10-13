@@ -1,23 +1,37 @@
-import { isStop } from '../config/states';
-import { addDaysToDate, DAY, dayStartMs, localDate } from '../lib/time';
+import type { components } from '../api/generated/analytics';
+import { isLoss, type StateCode } from '../config/states';
+import { addDaysToDate, DAY, dayStartMs, localDate, toIso } from '../lib/time';
 import { MOCK_CONFIG } from './config';
-import { ENTERPRISE, LINES, LOSS_REASONS, MACHINES, type MockMachine } from './fixtures';
+import { ENTERPRISE, LINES, LOSS_REASONS, MACHINES, SHIFTS, type MockMachine } from './fixtures';
 import { generateDay, type GenInterval } from './generate/day';
+
+type S = components['schemas'];
 
 export interface MockIncident {
   id: string;
   machineId: string;
   from: number;
   to: number | null;
-  reasonId: string;
-  comment: string;
-  author: string;
+  stateOverride: S['ManualStateOverride'] | null;
+  lossReasonId: string | null;
+  comment: string | null;
+  author: string | null;
   createdAt: number;
+  updatedAt: number;
+  cancelledAt: number | null;
 }
 
-export interface MockInterval extends Omit<GenInterval, 'to'> {
+export interface MockInterval {
+  machineId: string;
+  stateCode: StateCode;
+  calculatedState: StateCode;
+  stateSource: S['StateSource'];
+  from: number;
   to: number | null;
-  incident?: { id: string; comment: string; author: string } | null;
+  reasonId: string | null;
+  stateIncidentId: string | null;
+  reasonIncidentId: string | null;
+  speed: number;
 }
 
 const clone = <T>(v: T): T => structuredClone(v);
@@ -31,32 +45,84 @@ function loadIncidents(): MockIncident[] {
   }
 }
 
+const fromGen = (g: GenInterval): MockInterval => ({
+  machineId: g.machineId,
+  stateCode: g.stateCode,
+  calculatedState: g.stateCode,
+  stateSource: 'CALCULATED',
+  from: g.from,
+  to: g.to,
+  reasonId: g.reasonId,
+  stateIncidentId: null,
+  reasonIncidentId: null,
+  speed: g.speed,
+});
+
+function overlay(list: MockInterval[], inc: MockIncident, now: number): MockInterval[] {
+  const a = inc.from;
+  const b = inc.to ?? now;
+  if (b <= a) return list;
+  return list.flatMap((it) => {
+    const itTo = it.to ?? now;
+    if (itTo <= a || it.from >= b) return [it];
+    const out: MockInterval[] = [];
+    if (it.from < a) out.push({ ...it, to: a });
+    const mid: MockInterval = { ...it, from: Math.max(it.from, a), to: itTo > b ? b : it.to };
+    if (inc.stateOverride) {
+      mid.stateCode = inc.stateOverride;
+      mid.stateSource = 'MANUAL';
+      mid.stateIncidentId = inc.id;
+      if (!inc.lossReasonId) {
+        mid.reasonId = null;
+        mid.reasonIncidentId = null;
+      }
+    }
+    if (inc.lossReasonId && isLoss(mid.stateCode)) {
+      mid.reasonId = inc.lossReasonId;
+      mid.reasonIncidentId = inc.id;
+    }
+    out.push(mid);
+    if (itTo > b) out.push({ ...it, from: b });
+    return out;
+  });
+}
+
 export const db = {
   enterprises: [clone(ENTERPRISE)],
+  shifts: clone(SHIFTS),
   lines: clone(LINES),
-  machines: clone(MACHINES) as MockMachine[],
+  machines: clone(MACHINES),
   reasons: clone(LOSS_REASONS),
   incidents: loadIncidents(),
   days: new Map<string, GenInterval[]>(),
 
   tz: () => db.enterprises[0].timezone,
 
+  historyStart(now: number) {
+    const tz = db.tz();
+    return dayStartMs(localDate(now - MOCK_CONFIG.historyDays * DAY, tz), tz);
+  },
+
   persist() {
     try {
       localStorage.setItem(MOCK_CONFIG.persistKey, JSON.stringify({ incidents: db.incidents }));
-    } catch {
-    }
+    } catch {}
   },
 
   machine(id: string) {
-    return db.machines.find((m) => m.id === id);
+    const m = db.machines.find((x) => x.id === id);
+    if (m) m.coverageFrom = toIso(db.historyStart(Date.now()), db.tz());
+    return m;
   },
 
-  machinesOf(scope: 'enterprise' | 'line' | 'machine', id: string): MockMachine[] {
-    if (scope === 'machine') return db.machines.filter((m) => m.id === id);
-    if (scope === 'line') return db.machines.filter((m) => m.lineId === id && !m.archived);
-    const lineIds = new Set(db.lines.filter((l) => l.enterpriseId === id).map((l) => l.id));
-    return db.machines.filter((m) => lineIds.has(m.lineId) && !m.archived);
+  machinesOf(scope: S['AnalyticsScope'], id: string): MockMachine[] {
+    if (scope === 'MACHINE') return db.machines.filter((m) => m.id === id);
+    if (scope === 'LINE') return db.machines.filter((m) => m.lineId === id && m.status === 'ACTIVE');
+    return db.machines.filter((m) => m.enterpriseId === id && m.status === 'ACTIVE');
+  },
+
+  reason(id: string | null | undefined) {
+    return id ? db.reasons.find((r) => r.id === id) : undefined;
   },
 
   day(machine: MockMachine, date: string) {
@@ -71,40 +137,31 @@ export const db = {
 
   intervals(machine: MockMachine, from: number, to: number, now: number): MockInterval[] {
     const tz = db.tz();
-    const historyStart = dayStartMs(localDate(now - MOCK_CONFIG.historyDays * DAY, tz), tz);
-    const start = Math.max(from, historyStart);
+    const start = Math.max(from, db.historyStart(now));
     const end = Math.min(to, now);
     if (end <= start) return [];
 
-    const out: MockInterval[] = [];
+    let out: MockInterval[] = [];
     const last = localDate(end - 1, tz);
     for (let date = localDate(start, tz); date <= last; date = addDaysToDate(date, 1)) {
-      for (const it of db.day(machine, date)) {
-        if (it.to <= start || it.from >= end) continue;
-        const clipped: MockInterval = { ...it, from: Math.max(it.from, start), to: it.to > end ? end : it.to };
+      for (const g of db.day(machine, date)) {
+        if (g.to <= start || g.from >= end) continue;
+        const it = fromGen({ ...g, from: Math.max(g.from, start), to: Math.min(g.to, end) });
         const prev = out[out.length - 1];
-        if (prev && prev.to === clipped.from && prev.stateCode === clipped.stateCode && prev.reasonId === clipped.reasonId) {
-          prev.to = clipped.to;
+        if (prev && prev.to === it.from && prev.stateCode === it.stateCode && prev.reasonId === it.reasonId) {
+          prev.to = it.to;
         } else {
-          out.push(clipped);
+          out.push(it);
         }
       }
     }
     const tail = out[out.length - 1];
     if (tail && tail.to === now) tail.to = null;
 
-    const incidents = db.incidents.filter((i) => i.machineId === machine.id);
-    if (incidents.length) {
-      for (const it of out) {
-        if (!isStop(it.stateCode)) continue;
-        const itTo = it.to ?? now;
-        const inc = incidents.find((i) => i.from < itTo && (i.to ?? now) > it.from);
-        if (inc) {
-          it.reasonId = inc.reasonId;
-          it.incident = { id: inc.id, comment: inc.comment, author: inc.author };
-        }
-      }
-    }
+    const incidents = db.incidents
+      .filter((i) => i.machineId === machine.id && !i.cancelledAt)
+      .sort((a, b) => a.createdAt - b.createdAt);
+    for (const inc of incidents) out = overlay(out, inc, now);
     return out;
   },
 };

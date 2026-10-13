@@ -14,5 +14,5 @@ export const enterpriseOverview: DashboardConfig = {
 export default function EnterpriseOverviewPage() {
   const { enterprise } = useEnterpriseTree();
   if (!enterprise) return null;
-  return <Dashboard config={enterpriseOverview} ctx={{ scope: 'enterprise', id: enterprise.id, mode: 'pareto' }} />;
+  return <Dashboard config={enterpriseOverview} ctx={{ scope: 'ENTERPRISE', id: enterprise.id, mode: 'pareto' }} />;
 }

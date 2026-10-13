@@ -5,6 +5,7 @@ export interface IncidentDraft {
   from?: number;
   to?: number | null;
   reasonId?: string;
+  stateOverride?: 'SETUP' | 'PLANNED_STOP';
 }
 
 export const useIncidentModal = create<{

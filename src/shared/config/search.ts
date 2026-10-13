@@ -9,7 +9,7 @@ export const dashboardSearchSchema = z.object({
   range: z.enum(PERIOD_PRESETS).optional().catch(undefined),
   from: z.string().optional().catch(undefined),
   to: z.string().optional().catch(undefined),
-  shift: z.enum(['all', 'day', 'night']).optional().catch(undefined),
+  shift: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/).optional().catch(undefined),
   refresh: z.enum(REFRESH_OPTIONS).optional().catch(undefined),
   kiosk: z.coerce.boolean().optional().catch(undefined),
 });

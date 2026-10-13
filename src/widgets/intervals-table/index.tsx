@@ -1,4 +1,4 @@
-import { Badge, Button, CloseButton, Group, MultiSelect, Pagination, Select, Table, Text, UnstyledButton } from '@mantine/core';
+import { Badge, Button, CloseButton, Group, MultiSelect, Pagination, Select, Table, Text, Tooltip, UnstyledButton } from '@mantine/core';
 import { IconArrowDown, IconArrowUp, IconArrowsSort, IconFilter } from '@tabler/icons-react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
@@ -16,14 +16,23 @@ import { StateDot } from '@/entities/machine';
 import { useDrilldown } from '@/features/losses-drilldown';
 import { usePeriod } from '@/features/period-filter';
 import { useIncidentModal } from '@/features/register-incident';
-import { api, type StateInterval } from '@/shared/api';
-import { isStop, STATE_CODES, UNKNOWN_REASON, type StateCode } from '@/shared/config';
+import { api, incidentById, type IntervalFilters, type ManualIncident, type MachineState } from '@/shared/api';
+import { isLoss, isStop, OTHER_REASON, STATE_CODES, UNKNOWN_REASON } from '@/shared/config';
 import { useTranslation } from '@/shared/i18n';
 import { formatDateTime, formatDuration, getAppTimezone, shiftWindows } from '@/shared/lib';
 import { canEditIncidents, useUiStore } from '@/shared/model';
 import { Panel, type PanelContext } from '@/shared/ui';
 
-type Row = StateInterval & { end: number; durationSec: number };
+interface Row {
+  from: number;
+  end: number;
+  ongoing: boolean;
+  durationSec: number;
+  state: MachineState;
+  manual: boolean;
+  reasonKey: string | null;
+  incident?: ManualIncident;
+}
 const col = createColumnHelper<Row>();
 
 export function IntervalsTable({ ctx }: { ctx: PanelContext }) {
@@ -39,27 +48,33 @@ export function IntervalsTable({ ctx }: { ctx: PanelContext }) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'from', desc: true }]);
   const [page, setPage] = useState(0);
 
-  const q = useQuery({ ...api.intervals(machineId, period.params), placeholderData: keepPreviousData });
-
   useEffect(() => clearDrill(), [machineId, clearDrill]);
 
+  const reasonKey = reasonFilter ?? (drill?.reasonId && drill.reasonId !== OTHER_REASON ? drill.reasonId : null);
+  const filters: IntervalFilters = {
+    ...(states.length ? { state: states as MachineState[] } : {}),
+    ...(reasonKey === UNKNOWN_REASON ? { unclassifiedOnly: true, lossOnly: true } : reasonKey ? { lossReasonId: reasonKey } : {}),
+  };
+  const range = drill?.from != null ? { from: drill.from, to: drill.to ?? period.to } : { from: period.from, to: period.to };
+  const q = useQuery({ ...api.stateIntervals(machineId, { ...range, asOf: period.params.asOf }, filters), placeholderData: keepPreviousData });
+  const incidentsQ = useQuery(api.machineIncidents(machineId, range));
+  const incidents = useMemo(() => incidentById(incidentsQ.data), [incidentsQ.data]);
+
   const data = useMemo<Row[]>(() => {
-    const windows = shiftWindows(period.from, period.to, period.shift, getAppTimezone());
-    return (q.data ?? [])
-      .map((i) => {
-        const end = i.to ?? period.now;
-        return { ...i, end, durationSec: (end - i.from) / 1000 };
-      })
-      .filter((i) => windows.some((w) => i.from < w.to && i.end > w.from))
-      .filter((i) => !states.length || states.includes(i.stateCode))
-      .filter((i) => {
-        const r = reasonFilter ?? drill?.reasonId;
-        if (!r) return true;
-        if (i.stateCode === 'RUN' || i.stateCode === 'OFFLINE') return false;
-        return r === UNKNOWN_REASON ? !i.reasonId : i.reasonId === r;
-      })
-      .filter((i) => !drill?.from || (i.from < (drill.to ?? Infinity) && i.end > drill.from));
-  }, [q.data, period, states, reasonFilter, drill]);
+    const windows = shiftWindows(period.from, period.to, period.shiftId, getAppTimezone());
+    return (q.data?.items ?? [])
+      .map((i) => ({
+        from: Date.parse(i.from),
+        end: Date.parse(i.to),
+        ongoing: !!i.openEnded,
+        durationSec: i.durationSec,
+        state: i.effectiveState,
+        manual: i.stateSource === 'MANUAL',
+        reasonKey: isLoss(i.effectiveState) ? (i.lossReason?.id ?? UNKNOWN_REASON) : null,
+        incident: incidents.get(i.reasonIncidentId ?? '') ?? incidents.get(i.stateIncidentId ?? ''),
+      }))
+      .filter((i) => windows.some((w) => i.from < w.to && i.end > w.from));
+  }, [q.data, incidents, period.from, period.to, period.shiftId]);
 
   useEffect(() => setPage(0), [data.length]);
 
@@ -68,38 +83,45 @@ export function IntervalsTable({ ctx }: { ctx: PanelContext }) {
       col.accessor('from', { header: t('intervals.from'), cell: (c) => formatDateTime(c.getValue()) }),
       col.accessor('end', {
         header: t('intervals.to'),
-        cell: (c) => (c.row.original.to == null ? <Badge size="xs" variant="dot">{t('intervals.ongoing')}</Badge> : formatDateTime(c.getValue())),
+        cell: (c) => (c.row.original.ongoing ? <Badge size="xs" variant="dot">{t('intervals.ongoing')}</Badge> : formatDateTime(c.getValue())),
       }),
       col.accessor('durationSec', { header: t('intervals.duration'), cell: (c) => formatDuration(c.getValue()) }),
-      col.accessor('stateCode', {
+      col.accessor('state', {
         header: t('intervals.state'),
         cell: (c) => (
           <Group gap={6} wrap="nowrap">
             <StateDot state={c.getValue()} />
             {t(`state.${c.getValue()}`)}
+            {c.row.original.manual && (
+              <Tooltip label="Состояние задано инцидентом">
+                <Badge size="xs" variant="outline">
+                  вручную
+                </Badge>
+              </Tooltip>
+            )}
           </Group>
         ),
       }),
-      col.accessor((r) => (r.stateCode === 'RUN' || r.stateCode === 'OFFLINE' ? '' : reasons.nameOf(r.reasonId)), {
+      col.accessor((r) => (r.reasonKey ? reasons.nameOf(r.reasonKey) : ''), {
         id: 'reason',
         header: t('intervals.reason'),
         cell: (c) => {
           const r = c.row.original;
-          if (isStop(r.stateCode) && !r.reasonId) {
+          if (isStop(r.state) && r.reasonKey === UNKNOWN_REASON) {
             return (
               <Group gap={6} wrap="nowrap">
                 <Text size="sm" c="grape.4" fw={600}>
                   {t('reason.unknown')}
                 </Text>
                 {canEditIncidents(role) && (
-                  <Button size="compact-xs" variant="light" color="grape" onClick={() => openIncident({ machineId, from: r.from, to: r.to })}>
+                  <Button size="compact-xs" variant="light" color="grape" onClick={() => openIncident({ machineId, from: r.from, to: r.ongoing ? null : r.end })}>
                     {t('intervals.setReason')}
                   </Button>
                 )}
               </Group>
             );
           }
-          return r.stateCode === 'RUN' || r.stateCode === 'OFFLINE' ? '' : reasons.nameOf(r.reasonId);
+          return r.reasonKey ? reasons.nameOf(r.reasonKey) : '';
         },
       }),
       col.accessor((r) => r.incident?.comment ?? '', { id: 'comment', header: t('intervals.comment'), enableSorting: false }),
@@ -118,7 +140,7 @@ export function IntervalsTable({ ctx }: { ctx: PanelContext }) {
     getPaginationRowModel: getPaginationRowModel(),
   });
 
-  const unknownCount = data.filter((r) => isStop(r.stateCode) && !r.reasonId).length;
+  const unknownCount = data.filter((r) => isStop(r.state) && r.reasonKey === UNKNOWN_REASON).length;
 
   return (
     <Panel
@@ -137,10 +159,10 @@ export function IntervalsTable({ ctx }: { ctx: PanelContext }) {
       rows={() =>
         table.getSortedRowModel().rows.map(({ original: r }) => ({
           [t('intervals.from')]: formatDateTime(r.from),
-          [t('intervals.to')]: r.to == null ? t('intervals.ongoing') : formatDateTime(r.end),
+          [t('intervals.to')]: r.ongoing ? t('intervals.ongoing') : formatDateTime(r.end),
           [t('intervals.duration')]: formatDuration(r.durationSec),
-          [t('intervals.state')]: t(`state.${r.stateCode}`),
-          [t('intervals.reason')]: r.stateCode === 'RUN' || r.stateCode === 'OFFLINE' ? '' : reasons.nameOf(r.reasonId),
+          [t('intervals.state')]: t(`state.${r.state}`),
+          [t('intervals.reason')]: r.reasonKey ? reasons.nameOf(r.reasonKey) : '',
           [t('intervals.comment')]: r.incident?.comment ?? '',
           [t('intervals.author')]: r.incident?.author ?? '',
         }))
@@ -167,7 +189,7 @@ export function IntervalsTable({ ctx }: { ctx: PanelContext }) {
           onChange={setReasonFilter}
           clearable
         />
-        <Button size="compact-sm" variant="subtle" onClick={() => setStates(['IDLE', 'DOWN'] satisfies StateCode[])}>
+        <Button size="compact-sm" variant="subtle" onClick={() => setStates(['IDLE', 'DOWN'])}>
           {t('intervals.onlyStops')}
         </Button>
         {drill && (
@@ -230,7 +252,7 @@ export function IntervalsTable({ ctx }: { ctx: PanelContext }) {
       </Table.ScrollContainer>
       <Group justify="space-between" mt="xs" gap="xs" wrap="wrap">
         <Text size="xs" c="dimmed">
-          {data.length} записей
+          {data.length} записей{q.data?.truncated ? ' (показаны первые 5000 — сузьте период)' : ''}
         </Text>
         <Pagination size="sm" siblings={1} boundaries={1} total={table.getPageCount()} value={page + 1} onChange={(p) => setPage(p - 1)} />
       </Group>

@@ -1,13 +1,7 @@
 import { analyticsHandlers } from './analytics';
-import { enterpriseHandlers } from './enterprises';
+import { authHandlers } from './auth';
+import { configHandlers } from './config';
 import { incidentHandlers } from './incidents';
-import { machineHandlers } from './machines';
-import { telemetryHandlers } from './telemetry';
+import { operationsHandlers } from './operations';
 
-export const handlers = [
-  ...enterpriseHandlers,
-  ...machineHandlers,
-  ...incidentHandlers,
-  ...analyticsHandlers,
-  ...telemetryHandlers,
-];
+export const handlers = [...authHandlers, ...configHandlers, ...operationsHandlers, ...analyticsHandlers, ...incidentHandlers];

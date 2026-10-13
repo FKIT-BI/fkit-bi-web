@@ -1,9 +1,10 @@
 import { ActionIcon, Anchor, Breadcrumbs, Burger, Group, Menu, Select, Text, Tooltip, useMantineColorScheme } from '@mantine/core';
-import { IconCheck, IconDeviceTv, IconMoon, IconSettings, IconSun } from '@tabler/icons-react';
+import { IconCheck, IconDeviceTv, IconLogout, IconMoon, IconSettings, IconSun, IconUser } from '@tabler/icons-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { useEnterpriseTree } from '@/entities/enterprise';
 import { useTranslation } from '@/shared/i18n';
-import { useDashboardSearch, useUiStore, type Role } from '@/shared/model';
+import { useAuth, useDashboardSearch, useUiStore, type Role } from '@/shared/model';
 
 const ROLES: Role[] = ['admin', 'master', 'viewer'];
 
@@ -18,6 +19,13 @@ export function AppHeader({ title, mobileOpened, onToggleMobile }: { title?: str
   const line = tree.lines.find((l) => l.id === machine?.lineId);
   const current = machine?.name ?? title;
   const enableKiosk = () => update({ kiosk: true, refresh: '1m' });
+  const user = useAuth((s) => s.user);
+  const signOut = useAuth((s) => s.signOut);
+  const qc = useQueryClient();
+  const logout = () => {
+    signOut();
+    qc.clear();
+  };
 
   return (
     <Group h="100%" px="sm" justify="space-between" wrap="nowrap" gap="sm">
@@ -72,11 +80,12 @@ export function AppHeader({ title, mobileOpened, onToggleMobile }: { title?: str
         </Tooltip>
         <Menu position="bottom-end" withinPortal>
           <Menu.Target>
-            <ActionIcon hiddenFrom="lg" variant="default" size={30} aria-label="Настройки">
-              <IconSettings size={16} />
+            <ActionIcon variant="default" size={30} aria-label="Настройки">
+              {user ? <IconUser size={16} /> : <IconSettings size={16} />}
             </ActionIcon>
           </Menu.Target>
           <Menu.Dropdown>
+            {user && <Menu.Label>{user.displayName} ({user.username})</Menu.Label>}
             <Menu.Label>{t('role.label')}</Menu.Label>
             {ROLES.map((r) => (
               <Menu.Item key={r} onClick={() => setRole(r)} rightSection={role === r ? <IconCheck size={14} /> : null}>
@@ -89,6 +98,10 @@ export function AppHeader({ title, mobileOpened, onToggleMobile }: { title?: str
             </Menu.Item>
             <Menu.Item leftSection={<IconDeviceTv size={14} />} onClick={enableKiosk}>
               Режим киоска
+            </Menu.Item>
+            <Menu.Divider />
+            <Menu.Item color="red" leftSection={<IconLogout size={14} />} onClick={logout}>
+              {t('auth.logout')}
             </Menu.Item>
           </Menu.Dropdown>
         </Menu>

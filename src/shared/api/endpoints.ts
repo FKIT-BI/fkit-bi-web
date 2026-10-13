@@ -1,176 +1,190 @@
 import { queryOptions } from '@tanstack/react-query';
-import { z } from 'zod';
 import { toIso } from '../lib/time';
-import { request } from './http';
-import * as C from './contract';
+import { analyticsClient as A, unwrap } from './client';
+import type {
+  AnalyticsScope,
+  EffectiveStateInterval,
+  LoginRequest,
+  ManualIncident,
+  ManualIncidentCreate,
+  MachineState,
+  Resolution,
+} from './types';
 
 export interface RangeParams {
   from: number;
   to: number;
-  shift?: C.Shift;
+  shiftId?: string;
   asOf?: number;
 }
-const range = (p: RangeParams) => ({ from: toIso(p.from), to: toIso(p.to), shift: p.shift ?? 'all' });
 
 export const qk = {
-  enterprises: ['enterprises'] as const,
-  lines: ['lines'] as const,
-  machines: ['machines'] as const,
-  reasons: ['loss-reasons'] as const,
-  incidents: ['incidents'] as const,
-  intervals: ['intervals'] as const,
+  config: ['config'] as const,
+  operations: ['operations'] as const,
   analytics: ['analytics'] as const,
+  intervals: ['intervals'] as const,
+  incidents: ['incidents'] as const,
   telemetry: ['telemetry'] as const,
 };
 
+const range = (p: RangeParams) => ({ from: toIso(p.from), to: toIso(p.to), ...(p.shiftId ? { shiftId: p.shiftId } : {}) });
+
+export interface IntervalFilters {
+  state?: MachineState[];
+  lossReasonId?: string;
+  unclassifiedOnly?: boolean;
+  lossOnly?: boolean;
+}
+
+async function allIntervals(machineId: string, p: RangeParams, f: IntervalFilters, signal: AbortSignal, maxPages = 10) {
+  const items: EffectiveStateInterval[] = [];
+  let cursor: string | undefined;
+  for (let i = 0; i < maxPages; i++) {
+    const page = await unwrap(
+      A.GET('/machines/{machineId}/state-intervals', {
+        params: { path: { machineId }, query: { from: toIso(p.from), to: toIso(p.to), limit: 500, cursor, ...f } },
+        signal,
+      }),
+    );
+    items.push(...page.items);
+    if (!page.cursor.hasMore || !page.cursor.nextCursor) return { items, truncated: false };
+    cursor = page.cursor.nextCursor;
+  }
+  return { items, truncated: true };
+}
+
 export const api = {
+  login: (body: LoginRequest) => unwrap(A.POST('/auth/login', { body })),
+
   enterprises: () =>
     queryOptions({
-      queryKey: qk.enterprises,
-      queryFn: ({ signal }) => request(z.array(C.EnterpriseSchema), '/enterprises', { signal }),
+      queryKey: [...qk.config, 'enterprises'],
+      queryFn: ({ signal }) => unwrap(A.GET('/enterprises', { params: { query: { size: 200 } }, signal })),
       staleTime: Infinity,
     }),
-  lines: (enterpriseId: string) =>
+  equipmentTree: (enterpriseId: string) =>
     queryOptions({
-      queryKey: [...qk.lines, enterpriseId],
+      queryKey: [...qk.config, 'equipment-tree', enterpriseId],
+      queryFn: ({ signal }) => unwrap(A.GET('/enterprises/{enterpriseId}/equipment-tree', { params: { path: { enterpriseId } }, signal })),
+      staleTime: 5 * 60_000,
+    }),
+  shifts: (enterpriseId: string) =>
+    queryOptions({
+      queryKey: [...qk.config, 'shifts', enterpriseId],
       queryFn: ({ signal }) =>
-        request(z.array(C.LineSchema), `/enterprises/${enterpriseId}/lines`, { signal }),
+        unwrap(A.GET('/enterprises/{enterpriseId}/shifts', { params: { path: { enterpriseId }, query: { size: 200 } }, signal })),
       staleTime: Infinity,
     }),
-  lineMachines: (lineId: string) =>
+  lossReasons: (enterpriseId: string) =>
     queryOptions({
-      queryKey: [...qk.machines, 'line', lineId],
-      queryFn: ({ signal }) => request(z.array(C.MachineSchema), `/lines/${lineId}/machines`, { signal }),
-      staleTime: Infinity,
-    }),
-  machine: (id: string) =>
-    queryOptions({
-      queryKey: [...qk.machines, id],
-      queryFn: ({ signal }) => request(C.MachineSchema, `/machines/${id}`, { signal }),
-      staleTime: Infinity,
-    }),
-  reasons: () =>
-    queryOptions({
-      queryKey: qk.reasons,
-      queryFn: ({ signal }) => request(z.array(C.LossReasonSchema), '/loss-reasons', { signal }),
-      staleTime: Infinity,
-    }),
-  incidents: (p: { machineId?: string; from?: number; to?: number }) =>
-    queryOptions({
-      queryKey: [...qk.incidents, p],
+      queryKey: [...qk.config, 'loss-reasons', enterpriseId],
       queryFn: ({ signal }) =>
-        request(z.array(C.IncidentSchema), '/incidents', {
-          signal,
-          query: {
-            machineId: p.machineId,
-            from: p.from != null ? toIso(p.from) : undefined,
-            to: p.to != null ? toIso(p.to) : undefined,
-          },
-        }),
-    }),
-  incident: (id: string) =>
-    queryOptions({
-      queryKey: [...qk.incidents, 'one', id],
-      queryFn: ({ signal }) => request(C.IncidentSchema, `/incidents/${id}`, { signal }),
-    }),
-  line: (id: string) =>
-    queryOptions({
-      queryKey: [...qk.lines, 'one', id],
-      queryFn: ({ signal }) => request(C.LineSchema, `/lines/${id}`, { signal }),
+        unwrap(A.GET('/enterprises/{enterpriseId}/loss-reasons', { params: { path: { enterpriseId }, query: { size: 200 } }, signal })),
       staleTime: Infinity,
     }),
-  enterprise: (id: string) =>
+  machine: (machineId: string) =>
     queryOptions({
-      queryKey: [...qk.enterprises, id],
-      queryFn: ({ signal }) => request(C.EnterpriseSchema, `/enterprises/${id}`, { signal }),
-      staleTime: Infinity,
+      queryKey: [...qk.config, 'machine', machineId],
+      queryFn: ({ signal }) => unwrap(A.GET('/machines/{machineId}', { params: { path: { machineId } }, signal })),
+      staleTime: 5 * 60_000,
     }),
 
-  createEnterprise: (body: C.EnterpriseInput) =>
-    request(C.EnterpriseSchema, '/enterprises', { method: 'POST', body }),
-  updateEnterprise: (id: string, body: C.EnterpriseInput) =>
-    request(C.EnterpriseSchema, `/enterprises/${id}`, { method: 'PUT', body }),
-  createLine: (enterpriseId: string, body: C.LineInput) =>
-    request(C.LineSchema, `/enterprises/${enterpriseId}/lines`, { method: 'POST', body }),
-  updateLine: (id: string, body: C.LineInput) => request(C.LineSchema, `/lines/${id}`, { method: 'PUT', body }),
-  createMachine: (lineId: string, body: C.MachineInput) =>
-    request(C.MachineSchema, `/lines/${lineId}/machines`, { method: 'POST', body }),
-  updateMachine: (id: string, body: C.MachineInput) =>
-    request(C.MachineSchema, `/machines/${id}`, { method: 'PUT', body }),
-  createLossReason: (body: C.LossReasonInput) =>
-    request(C.LossReasonSchema, '/loss-reasons', { method: 'POST', body }),
-  updateLossReason: (id: string, body: C.LossReasonInput) =>
-    request(C.LossReasonSchema, `/loss-reasons/${id}`, { method: 'PUT', body }),
-  createIncident: (body: C.IncidentInput) =>
-    request(C.IncidentSchema, '/incidents', { method: 'POST', body }),
-  updateIncident: (id: string, body: C.IncidentInput) =>
-    request(C.IncidentSchema, `/incidents/${id}`, { method: 'PUT', body }),
-  deleteIncident: (id: string) => request(z.null(), `/incidents/${id}`, { method: 'DELETE' }),
+  overview: (enterpriseId: string, now: number) =>
+    queryOptions({
+      queryKey: [...qk.operations, 'overview', enterpriseId, now],
+      queryFn: ({ signal }) =>
+        unwrap(A.GET('/enterprises/{enterpriseId}/operations/overview', { params: { path: { enterpriseId } }, signal })),
+    }),
+  machineCurrent: (machineId: string, now: number) =>
+    queryOptions({
+      queryKey: [...qk.operations, 'machine', machineId, now],
+      queryFn: ({ signal }) => unwrap(A.GET('/machines/{machineId}/operations/current', { params: { path: { machineId } }, signal })),
+    }),
+  telemetrySeries: (machineId: string, signalId: string, p: { from: number; to: number; resolution?: Resolution }) =>
+    queryOptions({
+      queryKey: [...qk.telemetry, 'series', machineId, signalId, p],
+      queryFn: ({ signal }) =>
+        unwrap(
+          A.GET('/machines/{machineId}/telemetry/series', {
+            params: { path: { machineId }, query: { signalId, from: toIso(p.from), to: toIso(p.to), resolution: p.resolution } },
+            signal,
+          }),
+        ),
+    }),
 
-  intervals: (machineId: string, p: RangeParams) =>
+  summary: (scope: AnalyticsScope, scopeId: string, p: RangeParams) =>
     queryOptions({
-      queryKey: [...qk.intervals, machineId, p],
-      queryFn: ({ signal }) =>
-        request(z.array(C.StateIntervalSchema), `/machines/${machineId}/intervals`, {
-          signal,
-          query: range(p),
-        }),
+      queryKey: [...qk.analytics, 'summary', scope, scopeId, p],
+      queryFn: ({ signal }) => unwrap(A.GET('/analytics/summary', { params: { query: { scope, scopeId, ...range(p) } }, signal })),
     }),
-  summary: (scope: C.Scope, id: string, p: RangeParams) =>
+  lossTimeseries: (scope: AnalyticsScope, scopeId: string, p: RangeParams & { resolution?: Resolution; top?: number }) =>
     queryOptions({
-      queryKey: [...qk.analytics, 'summary', scope, id, p],
+      queryKey: [...qk.analytics, 'losses', scope, scopeId, p],
       queryFn: ({ signal }) =>
-        request(C.SummarySchema, '/analytics/summary', { signal, query: { scope, id, ...range(p) } }),
+        unwrap(
+          A.GET('/analytics/losses/timeseries', {
+            params: { query: { scope, scopeId, ...range(p), resolution: p.resolution, top: p.top } },
+            signal,
+          }),
+        ),
     }),
-  currentStates: (enterpriseId: string, tick: number) =>
+  lossPareto: (scope: AnalyticsScope, scopeId: string, p: RangeParams & { top?: number }) =>
     queryOptions({
-      queryKey: [...qk.analytics, 'current-states', enterpriseId, tick],
-      queryFn: ({ signal }) =>
-        request(z.array(C.CurrentStateSchema), '/analytics/current-states', {
-          signal,
-          query: { enterpriseId },
-        }),
+      queryKey: [...qk.analytics, 'pareto', scope, scopeId, p],
+      queryFn: ({ signal }) => unwrap(A.GET('/analytics/losses/pareto', { params: { query: { scope, scopeId, ...range(p), top: p.top } }, signal })),
     }),
-  lossesTimeseries: (scope: C.Scope, id: string, p: RangeParams & { bucket: 'hour' | 'shift' | 'day' }) =>
+  chronometry: (machineId: string, shiftDate: string, now: number) =>
     queryOptions({
-      queryKey: [...qk.analytics, 'losses-ts', scope, id, p],
+      queryKey: [...qk.analytics, 'chronometry', machineId, shiftDate, now],
       queryFn: ({ signal }) =>
-        request(z.array(C.LossesBucketSchema), '/analytics/losses/timeseries', {
-          signal,
-          query: { scope, id, bucket: p.bucket, ...range(p) },
-        }),
+        unwrap(A.GET('/machines/{machineId}/chronometry', { params: { path: { machineId }, query: { shiftDate } }, signal })),
     }),
-  lossesPareto: (scope: C.Scope, id: string, p: RangeParams & { top?: number }) =>
+  stateIntervals: (machineId: string, p: RangeParams, f: IntervalFilters = {}) =>
     queryOptions({
-      queryKey: [...qk.analytics, 'losses-pareto', scope, id, p],
-      queryFn: ({ signal }) =>
-        request(z.array(C.ParetoRowSchema), '/analytics/losses/pareto', {
-          signal,
-          query: { scope, id, top: p.top, ...range(p) },
-        }),
+      queryKey: [...qk.intervals, machineId, p, f],
+      queryFn: ({ signal }) => allIntervals(machineId, p, f, signal),
     }),
-  chronometry: (p: { machineId: string; date: string; shift: 'day' | 'night'; top?: number; tick: number }) =>
+
+  machineIncidents: (machineId: string, p: { from: number; to: number }) =>
     queryOptions({
-      queryKey: [...qk.analytics, 'chronometry', p],
-      queryFn: ({ signal }) =>
-        request(C.ChronometrySchema, '/analytics/chronometry', {
-          signal,
-          query: { machineId: p.machineId, date: p.date, shift: p.shift, top: p.top ?? 5 },
-        }),
+      queryKey: [...qk.incidents, 'machine', machineId, p],
+      queryFn: async ({ signal }) =>
+        (
+          await unwrap(
+            A.GET('/machines/{machineId}/incidents', {
+              params: { path: { machineId }, query: { from: toIso(p.from), to: toIso(p.to), limit: 500 } },
+              signal,
+            }),
+          )
+        ).items,
     }),
-  telemetryLatest: (machineId: string, tick: number) =>
+  enterpriseIncidents: (enterpriseId: string, p: { from: number; to: number; machineId?: string; ongoing?: boolean }) =>
     queryOptions({
-      queryKey: [...qk.telemetry, 'latest', machineId, tick],
-      queryFn: ({ signal }) =>
-        request(C.TelemetryLatestSchema, `/machines/${machineId}/telemetry/latest`, { signal }),
+      queryKey: [...qk.incidents, 'enterprise', enterpriseId, p],
+      queryFn: async ({ signal }) =>
+        (
+          await unwrap(
+            A.GET('/enterprises/{enterpriseId}/incidents', {
+              params: {
+                path: { enterpriseId },
+                query: { from: toIso(p.from), to: toIso(p.to), machineId: p.machineId, ongoing: p.ongoing, limit: 500 },
+              },
+              signal,
+            }),
+          )
+        ).items,
     }),
-  telemetrySeries: (machineId: string, signalName: string, p: { from: number; to: number }) =>
-    queryOptions({
-      queryKey: [...qk.telemetry, 'series', machineId, signalName, p],
-      queryFn: ({ signal }) =>
-        request(C.TelemetrySeriesSchema, `/machines/${machineId}/telemetry/series`, {
-          signal,
-          query: { signal: signalName, from: toIso(p.from), to: toIso(p.to) },
-        }),
-    }),
+  createIncident: (machineId: string, body: ManualIncidentCreate, idempotencyKey: string) =>
+    unwrap(
+      A.POST('/machines/{machineId}/incidents', {
+        params: { path: { machineId }, header: { 'Idempotency-Key': idempotencyKey } },
+        body,
+      }),
+    ),
+  closeIncident: (incidentId: string, to: number) =>
+    unwrap(A.PUT('/incidents/{incidentId}/close', { params: { path: { incidentId } }, body: { to: toIso(to) } })),
+  cancelIncident: (incidentId: string) =>
+    unwrap(A.DELETE('/incidents/{incidentId}', { params: { path: { incidentId } } })),
 };
+
+export const incidentById = (list: ManualIncident[] | undefined) => new Map((list ?? []).map((i) => [i.id, i]));
