@@ -5,7 +5,7 @@ import { telemetryAt } from '../generate/telemetry';
 import { badRequest, latency, mockError, notFound, query } from './utils';
 
 export const telemetryHandlers = [
-  http.get('*/api/machines/:id/telemetry/latest', async ({ params, request }) => {
+  http.get('*/api/analytics/machines/:id/telemetry/latest', async ({ params, request }) => {
     await latency();
     const err = mockError(request);
     if (err) return err;
@@ -16,7 +16,7 @@ export const telemetryHandlers = [
     const values = Object.fromEntries(m.opcTags.map((t) => [t.signal, telemetryAt(m, t.signal, now, intervals)]));
     return HttpResponse.json({ machineId: m.id, ts: toIso(now, db.tz()), values });
   }),
-  http.get('*/api/machines/:id/telemetry/series', async ({ params, request }) => {
+  http.get('*/api/analytics/machines/:id/telemetry/series', async ({ params, request }) => {
     await latency();
     const err = mockError(request);
     if (err) return err;

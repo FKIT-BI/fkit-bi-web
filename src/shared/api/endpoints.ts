@@ -27,39 +27,39 @@ export const api = {
   enterprises: () =>
     queryOptions({
       queryKey: qk.enterprises,
-      queryFn: ({ signal }) => request(z.array(C.EnterpriseSchema), '/api/enterprises', { signal }),
+      queryFn: ({ signal }) => request(z.array(C.EnterpriseSchema), '/enterprises', { signal }),
       staleTime: Infinity,
     }),
   lines: (enterpriseId: string) =>
     queryOptions({
       queryKey: [...qk.lines, enterpriseId],
       queryFn: ({ signal }) =>
-        request(z.array(C.LineSchema), `/api/enterprises/${enterpriseId}/lines`, { signal }),
+        request(z.array(C.LineSchema), `/enterprises/${enterpriseId}/lines`, { signal }),
       staleTime: Infinity,
     }),
   lineMachines: (lineId: string) =>
     queryOptions({
       queryKey: [...qk.machines, 'line', lineId],
-      queryFn: ({ signal }) => request(z.array(C.MachineSchema), `/api/lines/${lineId}/machines`, { signal }),
+      queryFn: ({ signal }) => request(z.array(C.MachineSchema), `/lines/${lineId}/machines`, { signal }),
       staleTime: Infinity,
     }),
   machine: (id: string) =>
     queryOptions({
       queryKey: [...qk.machines, id],
-      queryFn: ({ signal }) => request(C.MachineSchema, `/api/machines/${id}`, { signal }),
+      queryFn: ({ signal }) => request(C.MachineSchema, `/machines/${id}`, { signal }),
       staleTime: Infinity,
     }),
   reasons: () =>
     queryOptions({
       queryKey: qk.reasons,
-      queryFn: ({ signal }) => request(z.array(C.LossReasonSchema), '/api/loss-reasons', { signal }),
+      queryFn: ({ signal }) => request(z.array(C.LossReasonSchema), '/loss-reasons', { signal }),
       staleTime: Infinity,
     }),
   incidents: (p: { machineId?: string; from?: number; to?: number }) =>
     queryOptions({
       queryKey: [...qk.incidents, p],
       queryFn: ({ signal }) =>
-        request(z.array(C.IncidentSchema), '/api/incidents', {
+        request(z.array(C.IncidentSchema), '/incidents', {
           signal,
           query: {
             machineId: p.machineId,
@@ -71,47 +71,47 @@ export const api = {
   incident: (id: string) =>
     queryOptions({
       queryKey: [...qk.incidents, 'one', id],
-      queryFn: ({ signal }) => request(C.IncidentSchema, `/api/incidents/${id}`, { signal }),
+      queryFn: ({ signal }) => request(C.IncidentSchema, `/incidents/${id}`, { signal }),
     }),
   line: (id: string) =>
     queryOptions({
       queryKey: [...qk.lines, 'one', id],
-      queryFn: ({ signal }) => request(C.LineSchema, `/api/lines/${id}`, { signal }),
+      queryFn: ({ signal }) => request(C.LineSchema, `/lines/${id}`, { signal }),
       staleTime: Infinity,
     }),
   enterprise: (id: string) =>
     queryOptions({
       queryKey: [...qk.enterprises, id],
-      queryFn: ({ signal }) => request(C.EnterpriseSchema, `/api/enterprises/${id}`, { signal }),
+      queryFn: ({ signal }) => request(C.EnterpriseSchema, `/enterprises/${id}`, { signal }),
       staleTime: Infinity,
     }),
 
   createEnterprise: (body: C.EnterpriseInput) =>
-    request(C.EnterpriseSchema, '/api/enterprises', { method: 'POST', body }),
+    request(C.EnterpriseSchema, '/enterprises', { method: 'POST', body }),
   updateEnterprise: (id: string, body: C.EnterpriseInput) =>
-    request(C.EnterpriseSchema, `/api/enterprises/${id}`, { method: 'PUT', body }),
+    request(C.EnterpriseSchema, `/enterprises/${id}`, { method: 'PUT', body }),
   createLine: (enterpriseId: string, body: C.LineInput) =>
-    request(C.LineSchema, `/api/enterprises/${enterpriseId}/lines`, { method: 'POST', body }),
-  updateLine: (id: string, body: C.LineInput) => request(C.LineSchema, `/api/lines/${id}`, { method: 'PUT', body }),
+    request(C.LineSchema, `/enterprises/${enterpriseId}/lines`, { method: 'POST', body }),
+  updateLine: (id: string, body: C.LineInput) => request(C.LineSchema, `/lines/${id}`, { method: 'PUT', body }),
   createMachine: (lineId: string, body: C.MachineInput) =>
-    request(C.MachineSchema, `/api/lines/${lineId}/machines`, { method: 'POST', body }),
+    request(C.MachineSchema, `/lines/${lineId}/machines`, { method: 'POST', body }),
   updateMachine: (id: string, body: C.MachineInput) =>
-    request(C.MachineSchema, `/api/machines/${id}`, { method: 'PUT', body }),
+    request(C.MachineSchema, `/machines/${id}`, { method: 'PUT', body }),
   createLossReason: (body: C.LossReasonInput) =>
-    request(C.LossReasonSchema, '/api/loss-reasons', { method: 'POST', body }),
+    request(C.LossReasonSchema, '/loss-reasons', { method: 'POST', body }),
   updateLossReason: (id: string, body: C.LossReasonInput) =>
-    request(C.LossReasonSchema, `/api/loss-reasons/${id}`, { method: 'PUT', body }),
+    request(C.LossReasonSchema, `/loss-reasons/${id}`, { method: 'PUT', body }),
   createIncident: (body: C.IncidentInput) =>
-    request(C.IncidentSchema, '/api/incidents', { method: 'POST', body }),
+    request(C.IncidentSchema, '/incidents', { method: 'POST', body }),
   updateIncident: (id: string, body: C.IncidentInput) =>
-    request(C.IncidentSchema, `/api/incidents/${id}`, { method: 'PUT', body }),
-  deleteIncident: (id: string) => request(z.null(), `/api/incidents/${id}`, { method: 'DELETE' }),
+    request(C.IncidentSchema, `/incidents/${id}`, { method: 'PUT', body }),
+  deleteIncident: (id: string) => request(z.null(), `/incidents/${id}`, { method: 'DELETE' }),
 
   intervals: (machineId: string, p: RangeParams) =>
     queryOptions({
       queryKey: [...qk.intervals, machineId, p],
       queryFn: ({ signal }) =>
-        request(z.array(C.StateIntervalSchema), `/api/machines/${machineId}/intervals`, {
+        request(z.array(C.StateIntervalSchema), `/machines/${machineId}/intervals`, {
           signal,
           query: range(p),
         }),
@@ -120,13 +120,13 @@ export const api = {
     queryOptions({
       queryKey: [...qk.analytics, 'summary', scope, id, p],
       queryFn: ({ signal }) =>
-        request(C.SummarySchema, '/api/analytics/summary', { signal, query: { scope, id, ...range(p) } }),
+        request(C.SummarySchema, '/analytics/summary', { signal, query: { scope, id, ...range(p) } }),
     }),
   currentStates: (enterpriseId: string, tick: number) =>
     queryOptions({
       queryKey: [...qk.analytics, 'current-states', enterpriseId, tick],
       queryFn: ({ signal }) =>
-        request(z.array(C.CurrentStateSchema), '/api/analytics/current-states', {
+        request(z.array(C.CurrentStateSchema), '/analytics/current-states', {
           signal,
           query: { enterpriseId },
         }),
@@ -135,7 +135,7 @@ export const api = {
     queryOptions({
       queryKey: [...qk.analytics, 'losses-ts', scope, id, p],
       queryFn: ({ signal }) =>
-        request(z.array(C.LossesBucketSchema), '/api/analytics/losses/timeseries', {
+        request(z.array(C.LossesBucketSchema), '/analytics/losses/timeseries', {
           signal,
           query: { scope, id, bucket: p.bucket, ...range(p) },
         }),
@@ -144,7 +144,7 @@ export const api = {
     queryOptions({
       queryKey: [...qk.analytics, 'losses-pareto', scope, id, p],
       queryFn: ({ signal }) =>
-        request(z.array(C.ParetoRowSchema), '/api/analytics/losses/pareto', {
+        request(z.array(C.ParetoRowSchema), '/analytics/losses/pareto', {
           signal,
           query: { scope, id, top: p.top, ...range(p) },
         }),
@@ -153,7 +153,7 @@ export const api = {
     queryOptions({
       queryKey: [...qk.analytics, 'chronometry', p],
       queryFn: ({ signal }) =>
-        request(C.ChronometrySchema, '/api/analytics/chronometry', {
+        request(C.ChronometrySchema, '/analytics/chronometry', {
           signal,
           query: { machineId: p.machineId, date: p.date, shift: p.shift, top: p.top ?? 5 },
         }),
@@ -162,13 +162,13 @@ export const api = {
     queryOptions({
       queryKey: [...qk.telemetry, 'latest', machineId, tick],
       queryFn: ({ signal }) =>
-        request(C.TelemetryLatestSchema, `/api/machines/${machineId}/telemetry/latest`, { signal }),
+        request(C.TelemetryLatestSchema, `/machines/${machineId}/telemetry/latest`, { signal }),
     }),
   telemetrySeries: (machineId: string, signalName: string, p: { from: number; to: number }) =>
     queryOptions({
       queryKey: [...qk.telemetry, 'series', machineId, signalName, p],
       queryFn: ({ signal }) =>
-        request(C.TelemetrySeriesSchema, `/api/machines/${machineId}/telemetry/series`, {
+        request(C.TelemetrySeriesSchema, `/machines/${machineId}/telemetry/series`, {
           signal,
           query: { signal: signalName, from: toIso(p.from), to: toIso(p.to) },
         }),

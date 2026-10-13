@@ -8,18 +8,18 @@ import { toIso } from '../../lib/time';
 const toWire = ({ profile: _p, ...m }: MockMachine) => m;
 
 export const machineHandlers = [
-  http.get('*/api/lines/:id/machines', async ({ params }) => {
+  http.get('*/api/analytics/lines/:id/machines', async ({ params }) => {
     await latency();
     return HttpResponse.json(
       db.machines.filter((m) => m.lineId === params.id && !m.archived).sort((a, b) => a.order - b.order).map(toWire),
     );
   }),
-  http.get('*/api/machines/:id', async ({ params }) => {
+  http.get('*/api/analytics/machines/:id', async ({ params }) => {
     await latency();
     const m = db.machine(params.id as string);
     return m ? HttpResponse.json(toWire(m)) : notFound('Машина');
   }),
-  http.post('*/api/lines/:id/machines', async ({ params, request }) => {
+  http.post('*/api/analytics/lines/:id/machines', async ({ params, request }) => {
     await latency();
     if (!db.lines.some((l) => l.id === params.id)) return notFound('Линия');
     const { data, error } = await parseBody(request, MachineInputSchema);
@@ -28,7 +28,7 @@ export const machineHandlers = [
     db.machines.push(m);
     return HttpResponse.json(toWire(m), { status: 201 });
   }),
-  http.put('*/api/machines/:id', async ({ params, request }) => {
+  http.put('*/api/analytics/machines/:id', async ({ params, request }) => {
     await latency();
     const m = db.machine(params.id as string);
     if (!m) return notFound('Машина');
@@ -38,11 +38,11 @@ export const machineHandlers = [
     Object.assign(m, data);
     return HttpResponse.json(toWire(m));
   }),
-  http.get('*/api/loss-reasons', async () => {
+  http.get('*/api/analytics/loss-reasons', async () => {
     await latency();
     return HttpResponse.json(db.reasons);
   }),
-  http.post('*/api/loss-reasons', async ({ request }) => {
+  http.post('*/api/analytics/loss-reasons', async ({ request }) => {
     await latency();
     const { data, error } = await parseBody(request, LossReasonInputSchema);
     if (error) return error;
@@ -50,7 +50,7 @@ export const machineHandlers = [
     db.reasons.push(r);
     return HttpResponse.json(r, { status: 201 });
   }),
-  http.put('*/api/loss-reasons/:id', async ({ params, request }) => {
+  http.put('*/api/analytics/loss-reasons/:id', async ({ params, request }) => {
     await latency();
     const i = db.reasons.findIndex((r) => r.id === params.id);
     if (i < 0) return notFound('Причина');
@@ -59,7 +59,7 @@ export const machineHandlers = [
     db.reasons[i] = { ...data, id: db.reasons[i].id };
     return HttpResponse.json(db.reasons[i]);
   }),
-  http.get('*/api/machines/:id/intervals', async ({ params, request }) => {
+  http.get('*/api/analytics/machines/:id/intervals', async ({ params, request }) => {
     await latency();
     const err = mockError(request);
     if (err) return err;

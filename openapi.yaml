@@ -12,7 +12,10 @@ info:
     Время — ISO 8601 со смещением (2026-09-29T08:00:00+03:00), длительности — секунды,
     доли — числа 0..1. Зеркало на фронте: src/shared/api/contract.ts.
 servers:
-  - url: /
+  - url: /api/analytics
+    description: через edge-прокси (bi.kitexp.ru) или dev-прокси Vite
+  - url: https://api.bi.kitexp.ru
+    description: Dev-стенд, Analytics напрямую
 security: []
 tags:
   - name: enterprises
@@ -33,7 +36,7 @@ tags:
     description: calculate service
 
 paths:
-  /api/enterprises:
+  /enterprises:
     get:
       tags: [enterprises]
       operationId: listEnterprises
@@ -62,7 +65,7 @@ paths:
               schema: { $ref: '#/components/schemas/Enterprise' }
         '400': { $ref: '#/components/responses/BadRequest' }
 
-  /api/enterprises/{id}:
+  /enterprises/{id}:
     parameters:
       - $ref: '#/components/parameters/Id'
     get:
@@ -94,7 +97,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /api/enterprises/{id}/lines:
+  /enterprises/{id}/lines:
     parameters:
       - $ref: '#/components/parameters/Id'
     get:
@@ -126,7 +129,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /api/lines/{id}:
+  /lines/{id}:
     parameters:
       - $ref: '#/components/parameters/Id'
     get:
@@ -158,7 +161,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /api/lines/{id}/machines:
+  /lines/{id}/machines:
     parameters:
       - $ref: '#/components/parameters/Id'
     get:
@@ -190,7 +193,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /api/machines/{id}:
+  /machines/{id}:
     parameters:
       - $ref: '#/components/parameters/Id'
     get:
@@ -222,7 +225,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /api/loss-reasons:
+  /loss-reasons:
     get:
       tags: [loss-reasons]
       operationId: listLossReasons
@@ -250,7 +253,7 @@ paths:
               schema: { $ref: '#/components/schemas/LossReason' }
         '400': { $ref: '#/components/responses/BadRequest' }
 
-  /api/loss-reasons/{id}:
+  /loss-reasons/{id}:
     parameters:
       - $ref: '#/components/parameters/Id'
     put:
@@ -271,7 +274,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /api/incidents:
+  /incidents:
     get:
       tags: [incidents]
       operationId: listIncidents
@@ -313,7 +316,7 @@ paths:
               schema: { $ref: '#/components/schemas/Incident' }
         '400': { $ref: '#/components/responses/BadRequest' }
 
-  /api/incidents/{id}:
+  /incidents/{id}:
     parameters:
       - $ref: '#/components/parameters/Id'
     get:
@@ -353,7 +356,7 @@ paths:
           description: Удалено
         '404': { $ref: '#/components/responses/NotFound' }
 
-  /api/machines/{id}/intervals:
+  /machines/{id}/intervals:
     parameters:
       - $ref: '#/components/parameters/Id'
       - $ref: '#/components/parameters/From'
@@ -374,7 +377,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
 
-  /api/analytics/summary:
+  /analytics/summary:
     get:
       tags: [analytics]
       operationId: getSummary
@@ -394,7 +397,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '500': { $ref: '#/components/responses/ServerError' }
 
-  /api/analytics/current-states:
+  /analytics/current-states:
     get:
       tags: [analytics]
       operationId: listCurrentStates
@@ -414,7 +417,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
 
-  /api/analytics/losses/timeseries:
+  /analytics/losses/timeseries:
     get:
       tags: [analytics]
       operationId: getLossesTimeseries
@@ -438,7 +441,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '500': { $ref: '#/components/responses/ServerError' }
 
-  /api/analytics/losses/pareto:
+  /analytics/losses/pareto:
     get:
       tags: [analytics]
       operationId: getLossesPareto
@@ -461,7 +464,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '500': { $ref: '#/components/responses/ServerError' }
 
-  /api/analytics/chronometry:
+  /analytics/chronometry:
     get:
       tags: [analytics]
       operationId: getChronometry
@@ -493,7 +496,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
 
-  /api/machines/{id}/telemetry/latest:
+  /machines/{id}/telemetry/latest:
     parameters:
       - $ref: '#/components/parameters/Id'
     get:
@@ -509,7 +512,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
 
-  /api/machines/{id}/telemetry/series:
+  /machines/{id}/telemetry/series:
     parameters:
       - $ref: '#/components/parameters/Id'
       - name: signal

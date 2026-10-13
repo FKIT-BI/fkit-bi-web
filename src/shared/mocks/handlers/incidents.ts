@@ -31,7 +31,7 @@ function validate(b: IncidentBody) {
 }
 
 export const incidentHandlers = [
-  http.get('*/api/incidents', async ({ request }) => {
+  http.get('*/api/analytics/incidents', async ({ request }) => {
     await latency();
     const { time, str } = query(request);
     const machineId = str('machineId');
@@ -46,7 +46,7 @@ export const incidentHandlers = [
       .sort((a, b) => b.from - a.from);
     return HttpResponse.json(list.map(wire));
   }),
-  http.post('*/api/incidents', async ({ request }) => {
+  http.post('*/api/analytics/incidents', async ({ request }) => {
     await latency();
     const { data: body, error: bodyError } = await parseBody(request, IncidentInputSchema);
     if (bodyError) return bodyError;
@@ -66,12 +66,12 @@ export const incidentHandlers = [
     db.persist();
     return HttpResponse.json(wire(inc), { status: 201 });
   }),
-  http.get('*/api/incidents/:id', async ({ params }) => {
+  http.get('*/api/analytics/incidents/:id', async ({ params }) => {
     await latency();
     const inc = db.incidents.find((i) => i.id === params.id);
     return inc ? HttpResponse.json(wire(inc)) : notFound('Инцидент');
   }),
-  http.put('*/api/incidents/:id', async ({ params, request }) => {
+  http.put('*/api/analytics/incidents/:id', async ({ params, request }) => {
     await latency();
     const inc = db.incidents.find((i) => i.id === params.id);
     if (!inc) return notFound('Инцидент');
@@ -88,7 +88,7 @@ export const incidentHandlers = [
     db.persist();
     return HttpResponse.json(wire(inc));
   }),
-  http.delete('*/api/incidents/:id', async ({ params }) => {
+  http.delete('*/api/analytics/incidents/:id', async ({ params }) => {
     await latency();
     if (!db.incidents.some((i) => i.id === params.id)) return notFound('Инцидент');
     db.incidents = db.incidents.filter((i) => i.id !== params.id);

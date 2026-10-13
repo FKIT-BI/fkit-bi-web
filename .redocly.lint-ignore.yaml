@@ -2,5 +2,5 @@
 # See https://redocly.com/docs/cli/ for more information.
 openapi.yaml:
   operation-4xx-response:
-    - '#/paths/~1api~1enterprises/get/responses'
-    - '#/paths/~1api~1loss-reasons/get/responses'
+    - '#/paths/~1enterprises/get/responses'
+    - '#/paths/~1loss-reasons/get/responses'

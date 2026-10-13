@@ -24,7 +24,7 @@ function rangeOf(request: Request) {
 }
 
 export const analyticsHandlers = [
-  http.get('*/api/analytics/summary', async ({ request }) => {
+  http.get('*/api/analytics/analytics/summary', async ({ request }) => {
     await latency();
     const err = mockError(request);
     if (err) return err;
@@ -32,7 +32,7 @@ export const analyticsHandlers = [
     if (!r) return badRequest('from/to обязательны');
     return HttpResponse.json(calc.summary(r.scope, r.id, r.from, r.to, r.shift, r.now));
   }),
-  http.get('*/api/analytics/current-states', async ({ request }) => {
+  http.get('*/api/analytics/analytics/current-states', async ({ request }) => {
     await latency();
     const err = mockError(request);
     if (err) return err;
@@ -42,7 +42,7 @@ export const analyticsHandlers = [
     const now = Date.now();
     return HttpResponse.json(db.machinesOf('enterprise', id).map((m) => calc.currentState(m, now)));
   }),
-  http.get('*/api/analytics/losses/timeseries', async ({ request }) => {
+  http.get('*/api/analytics/analytics/losses/timeseries', async ({ request }) => {
     await latency();
     const err = mockError(request);
     if (err) return err;
@@ -51,7 +51,7 @@ export const analyticsHandlers = [
     const bucket = (query(request).str('bucket') ?? 'hour') as Bucket;
     return HttpResponse.json(calc.lossesTimeseries(r.scope, r.id, r.from, r.to, r.shift, bucket, r.now));
   }),
-  http.get('*/api/analytics/losses/pareto', async ({ request }) => {
+  http.get('*/api/analytics/analytics/losses/pareto', async ({ request }) => {
     await latency();
     const err = mockError(request);
     if (err) return err;
@@ -60,7 +60,7 @@ export const analyticsHandlers = [
     const top = Number(query(request).str('top')) || undefined;
     return HttpResponse.json(calc.lossesPareto(r.scope, r.id, r.from, r.to, r.shift, top, r.now));
   }),
-  http.get('*/api/analytics/chronometry', async ({ request }) => {
+  http.get('*/api/analytics/analytics/chronometry', async ({ request }) => {
     await latency();
     const err = mockError(request);
     if (err) return err;
