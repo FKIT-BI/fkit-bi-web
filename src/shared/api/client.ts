@@ -18,6 +18,34 @@ export class ApiError extends Error {
   }
 }
 
+const codeMessages: Record<string, string> = {
+  VALIDATION_FAILED: 'Проверьте введённые данные',
+  MALFORMED_REQUEST: 'Запрос содержит ошибку',
+  NOT_FOUND: 'Данные не найдены',
+  CONFLICT: 'Данные были изменены или конфликтуют с текущим состоянием',
+  INTERNAL_ERROR: 'На сервере произошла ошибка',
+  AUTHENTICATION_FAILED: 'Не удалось войти в систему',
+};
+
+export function formatApiError(error: unknown): string {
+  if (error instanceof ApiError) {
+    const body = error.body;
+    const russianMessage = body?.message && /[А-Яа-яЁё]/.test(body.message) ? body.message : undefined;
+    const fieldMessage = body?.fieldErrors.find((field) => /[А-Яа-яЁё]/.test(field.message))?.message;
+    const message = russianMessage ?? fieldMessage ?? (body?.code ? codeMessages[body.code] : undefined) ??
+      (error.status === 429 ? 'Слишком много запросов. Повторите позже' : error.status >= 500 ? 'Сервис временно недоступен' : 'Не удалось выполнить запрос');
+    return body?.traceId ? `${message} · код обращения ${body.traceId}` : message;
+  }
+  if (error instanceof DOMException && error.name === 'AbortError') return 'Запрос отменён';
+  return 'Не удалось связаться с сервисом';
+}
+
+export function shouldRetryRequest(failureCount: number, error: unknown): boolean {
+  if (error instanceof DOMException && error.name === 'AbortError') return false;
+  if (error instanceof ApiError) return failureCount < 2 && (error.status === 429 || error.status >= 500);
+  return failureCount < 2;
+}
+
 const auth: Middleware = {
   onRequest({ request }) {
     const token = useAuth.getState().token;

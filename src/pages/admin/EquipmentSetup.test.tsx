@@ -69,6 +69,7 @@ describe('настройка оборудования', () => {
         const req = input instanceof Request ? input : new Request(String(input), init);
         const url = req.url;
         requests.push({ url, method: req.method, auth: req.headers.get('Authorization') });
+        if (url.includes('/reference/measurement-units')) return json([{ code: 'PCS', name: 'Штука', symbol: 'шт', quantityCode: 'COUNT' }]);
         if (/\/enterprises\?/.test(url)) {
           return json({ items: [{ id: 'enterprise-1', code: 'PLANT_A', name: 'Завод', timezone: 'Europe/Moscow', status: 'ACTIVE' }], page: { number: 0, size: 200, totalElements: 1, totalPages: 1 } });
         }

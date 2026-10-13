@@ -272,6 +272,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reference/measurement-units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Получить активные единицы измерения
+         * @description Возвращает канонические code/name/symbol/quantityCode для селекторов; свободный ввод unit code не поддерживается.
+         */
+        get: operations["listMeasurementUnits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/enterprises/{enterpriseId}/lines": {
         parameters: {
             query?: never;
@@ -847,7 +867,8 @@ export interface paths {
         /**
          * Получить показатели периода и optional previous period
          * @description Принимает from+to с optional shiftId либо shiftId+shiftDate без from/to.
-         *     compare=PREVIOUS_PERIOD использует предыдущий диапазон той же длины или предыдущую occurrence той же Shift.
+         *     requestedTo сохраняется в metadata, а чтение ограничивается общей ready boundary машин; будущая граница даёт partial=true, но не ошибку.
+         *     compare=PREVIOUS_PERIOD использует только уже истёкшую часть текущего диапазона или предыдущей occurrence той же Shift.
          */
         get: operations["getAnalyticsSummary"];
         put?: never;
@@ -867,7 +888,7 @@ export interface paths {
         };
         /**
          * Получить временной ряд производственных показателей
-         * @description Возвращает ограниченный по точкам ряд KPI для области, временного диапазона и разрешения.
+         * @description Возвращает ограниченный по точкам ряд KPI; requestedTo сохраняется, данные клиппируются по ready boundary и metadata.partial сообщает о неполном периоде.
          */
         get: operations["getMetricTimeseries"];
         put?: never;
@@ -890,7 +911,7 @@ export interface paths {
         };
         /**
          * Получить агрегированный числовой ряд одного сигнала
-         * @description STATE и ненумерический signal возвращают несовместимость запроса.
+         * @description STATE и ненумерический signal возвращают несовместимость запроса. Будущий requestedTo сохраняется, но точки ограничиваются ready boundary.
          */
         get: operations["getTelemetrySeries"];
         put?: never;
@@ -910,7 +931,7 @@ export interface paths {
         };
         /**
          * Получить потери по времени и причинам
-         * @description Возвращает длительность потерь по временным интервалам и причинам для заданной области.
+         * @description Возвращает длительность потерь по временным интервалам и причинам; будущая часть requestedTo не читается и отражается через metadata.partial.
          */
         get: operations["getLossTimeseries"];
         put?: never;
@@ -930,7 +951,7 @@ export interface paths {
         };
         /**
          * Получить Парето причин потерь
-         * @description Ранжирует причины потерь по длительности и возвращает долю выбранного набора причин.
+         * @description Ранжирует причины потерь по длительности; requestedTo сохраняется, расчёт ограничивается ready boundary и помечается partial.
          */
         get: operations["getLossPareto"];
         put?: never;
@@ -976,7 +997,7 @@ export interface paths {
         };
         /**
          * Получить effective state intervals для таблицы
-         * @description Возвращает cursor-page эффективных интервалов состояний с фильтром источника и периода.
+         * @description Возвращает cursor-page эффективных интервалов; requestedTo сохраняется, интервалы клиппируются по ready boundary и partial=true для незавершённого периода.
          */
         get: operations["listMachineStateIntervals"];
         put?: never;
@@ -1238,6 +1259,21 @@ export interface components {
             code: string;
             message: string;
         };
+        /**
+         * @example {
+         *       "code": "VALIDATION_FAILED",
+         *       "message": "Проверьте поля запроса",
+         *       "traceId": "4e9c3e82-2b47-4e44-a8f9-feb98d6fb030",
+         *       "fieldErrors": [
+         *         {
+         *           "path": "productionUnit",
+         *           "code": "UNKNOWN_UNIT",
+         *           "message": "Выберите активную единицу из справочника"
+         *         }
+         *       ],
+         *       "details": {}
+         *     }
+         */
         ErrorResponse: {
             /** @example MACHINE_ALREADY_ASSIGNED */
             code: string;
@@ -1259,6 +1295,12 @@ export interface components {
             limit: number;
             hasMore: boolean;
             nextCursor?: string | null;
+        };
+        MeasurementUnit: {
+            code: components["schemas"]["StableCode"];
+            name: components["schemas"]["DisplayName"];
+            symbol?: string | null;
+            quantityCode?: string | null;
         };
         /**
          * @example {
@@ -1547,6 +1589,7 @@ export interface components {
             model?: string | null;
             commissioningYear?: number | null;
             nominalRate?: number | null;
+            /** @description Код активной MeasurementUnit. */
             productionUnit?: string | null;
             sortOrder?: number | null;
             parameters: components["schemas"]["TypedParameter"][];
@@ -1581,6 +1624,7 @@ export interface components {
             model?: string | null;
             commissioningYear?: number | null;
             nominalRate?: number | null;
+            /** @description Код активной MeasurementUnit. */
             productionUnit?: string | null;
             sortOrder?: number | null;
             parameters: components["schemas"]["TypedParameter"][];
@@ -1735,6 +1779,7 @@ export interface components {
             signalKind: components["schemas"]["SignalKind"];
             semanticCode: string;
             customSemanticCode?: string | null;
+            /** @description Код активной MeasurementUnit. */
             unitCode?: string | null;
             /** Format: int64 */
             expectedIntervalMs?: number | null;
@@ -1773,6 +1818,7 @@ export interface components {
             signalKind: components["schemas"]["SignalKind"];
             semanticCode: string;
             customSemanticCode?: string | null;
+            /** @description Код активной MeasurementUnit. */
             unitCode?: string | null;
             /** Format: int64 */
             expectedIntervalMs?: number | null;
@@ -2535,7 +2581,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description Некорректный JSON, query или сочетание параметров */
+        /** @description Некорректный JSON, query, диапазон или сочетание параметров; не ретраится клиентом */
         BadRequest: {
             headers: {
                 [name: string]: unknown;
@@ -2562,7 +2608,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description Ошибки полей или декларативной конфигурации */
+        /** @description Ошибки полей или декларативной конфигурации; fieldErrors[].path указывает поле формы */
         UnprocessableEntity: {
             headers: {
                 [name: string]: unknown;
@@ -2571,7 +2617,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description Непредвиденная ошибка */
+        /** @description Непредвиденная ошибка; ответ содержит только безопасный текст и traceId, stack trace пишется в лог сервиса */
         InternalError: {
             headers: {
                 [name: string]: unknown;
@@ -3160,6 +3206,27 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    listMeasurementUnits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Активные единицы в стабильном порядке */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementUnit"][];
+                };
+            };
+            500: components["responses"]["InternalError"];
         };
     };
     listLines: {
@@ -4003,7 +4070,9 @@ export interface operations {
                     "application/json": components["schemas"]["EquipmentTree"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     getEnterpriseOperationsOverview: {

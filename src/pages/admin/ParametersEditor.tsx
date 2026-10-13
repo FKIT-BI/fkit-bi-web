@@ -1,12 +1,13 @@
 import { ActionIcon, Button, Group, NativeSelect, NumberInput, Stack, Switch, Text, TextInput } from '@mantine/core';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
-import type { TypedParameter } from '@/shared/api';
+import type { MeasurementUnit, TypedParameter } from '@/shared/api';
+import { unitOptions } from './units';
 
 type Row = { code: string; name: string; valueType: 'STRING' | 'NUMBER' | 'BOOLEAN'; value: string | number | boolean; unitCode?: string | null; sortOrder: number };
 
 const initial = (t: Row['valueType']): Row['value'] => (t === 'NUMBER' ? 0 : t === 'BOOLEAN' ? false : '');
 
-export function ParametersEditor({ value, onChange }: { value: TypedParameter[]; onChange: (v: TypedParameter[]) => void }) {
+export function ParametersEditor({ value, units, errorFor, onChange }: { value: TypedParameter[]; units: MeasurementUnit[]; errorFor?: (path: string) => string | undefined; onChange: (v: TypedParameter[]) => void }) {
   const rows = value as unknown as Row[];
   const set = (i: number, p: Partial<Row>) => onChange(rows.map((r, n) => (n === i ? { ...r, ...p } : r)) as unknown as TypedParameter[]);
   return (
@@ -27,7 +28,7 @@ export function ParametersEditor({ value, onChange }: { value: TypedParameter[];
           {r.valueType === 'NUMBER' && <NumberInput size="xs" label={i === 0 ? 'Значение' : undefined} w={110} value={Number(r.value)} onChange={(v) => set(i, { value: Number(v || 0) })} />}
           {r.valueType === 'STRING' && <TextInput size="xs" label={i === 0 ? 'Значение' : undefined} w={110} value={String(r.value)} onChange={(e) => set(i, { value: e.currentTarget.value })} />}
           {r.valueType === 'BOOLEAN' && <Switch size="sm" mb={4} w={110} checked={!!r.value} onChange={(e) => set(i, { value: e.currentTarget.checked })} />}
-          {r.valueType === 'NUMBER' && <TextInput size="xs" label={i === 0 ? 'Ед.' : undefined} w={60} value={r.unitCode ?? ''} onChange={(e) => set(i, { unitCode: e.currentTarget.value || null })} />}
+          {r.valueType === 'NUMBER' && <NativeSelect size="xs" label={i === 0 ? 'Ед.' : undefined} w={150} value={r.unitCode ?? ''} data={unitOptions(units, r.unitCode, 'Без единицы')} error={errorFor?.(`parameters[${i}].unitCode`)} onChange={(e) => set(i, { unitCode: e.currentTarget.value || null })} />}
           <ActionIcon variant="subtle" color="red" aria-label="Удалить параметр" onClick={() => onChange(rows.filter((_, n) => n !== i).map((x, n) => ({ ...x, sortOrder: n })) as unknown as TypedParameter[])}><IconTrash size={14} /></ActionIcon>
         </Group>
       ))}
