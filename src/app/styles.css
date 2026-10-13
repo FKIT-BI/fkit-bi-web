@@ -1,0 +1,23 @@
+:root {
+  --panel-bg: #ffffff;
+  --panel-border: #dfe3e8;
+  --tile-bg: #f6f8fa;
+  --app-bg: #f4f5f5;
+}
+
+[data-mantine-color-scheme='dark'] {
+  --panel-bg: #181b1f;
+  --panel-border: #2c3235;
+  --tile-bg: #111217;
+  --app-bg: #111217;
+}
+
+body {
+  background: var(--app-bg);
+}
+
+@media (min-width: 2560px) {
+  html {
+    font-size: 125%;
+  }
+}

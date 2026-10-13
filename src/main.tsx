@@ -1,9 +1,17 @@
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import './style.css';
+import { App } from '@/app/App';
 
-const analyticsApi = import.meta.env.VITE_ANALYTICS_API_URL ?? '/api/analytics';
-const generatorApi = import.meta.env.VITE_GENERATOR_API_URL ?? '/api/generator';
-function App() {
-  return <main><h1>FKIT BI</h1><p>Стартовый каркас web-клиента.</p><small>Analytics: {analyticsApi}; Generator: {generatorApi}</small></main>;
+async function bootstrap() {
+  if ((import.meta.env.VITE_API_MODE ?? 'mock') === 'mock') {
+    const { startMocks } = await import('@/shared/mocks/browser');
+    await startMocks();
+  }
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
 }
-createRoot(document.getElementById('root')!).render(<App />);
+
+void bootstrap();
