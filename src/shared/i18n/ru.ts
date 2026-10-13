@@ -120,6 +120,8 @@ export const ru = {
     saved: 'Инцидент сохранён',
     errToBeforeFrom: 'Конец должен быть позже начала',
     errFuture: 'Время не может быть в будущем',
+    errBeforeCoverage: 'Раньше появления данных машины ({{at}})',
+    coverageHint: 'Данные машины с {{at}}',
     errRequired: 'Обязательное поле',
     overlap: 'Пересекается с инцидентами: {{list}}',
     stateOverride: 'Переопределить состояние',

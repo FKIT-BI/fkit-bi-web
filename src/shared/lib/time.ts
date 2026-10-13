@@ -56,9 +56,10 @@ function offsetMinutes(ms: number, tz: string): number {
   return off;
 }
 
+/** ISO-8601 with the zone offset; milliseconds are kept when present so exact backend boundaries survive a round trip. */
 export function toIso(ms: number, tz = appTz): string {
   const off = offsetMinutes(ms, tz);
-  const local = new Date(ms + off * MINUTE).toISOString().slice(0, 19);
+  const local = new Date(ms + off * MINUTE).toISOString().slice(0, ms % 1000 === 0 ? 19 : 23);
   const sign = off >= 0 ? '+' : '-';
   const abs = Math.abs(off);
   const hh = String(Math.floor(abs / 60)).padStart(2, '0');
