@@ -3,9 +3,10 @@ import { notifications } from '@mantine/notifications';
 import { IconPencil, IconPlus } from '@tabler/icons-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ApiError, setup, type Component, type ConfigStatus, type MachineStateConfigurationInput, type TelemetrySignal } from '@/shared/api';
+import { ApiError, setup, type Component, type ConfigStatus, type MachineStateConfigurationInput, type MeasurementUnit, type TelemetrySignal } from '@/shared/api';
 import { Panel } from '@/shared/ui';
 import { confirmDisable, errorMessage, FormModal, setupKey, StatusBadge, StatusToggle, useRefreshConfig, useStatusMutation } from './common';
+import { unitOptions } from './units';
 import { COMPONENT_KINDS, SIGNAL_SEMANTICS } from './EquipmentSetup';
 import { suggestRules } from './suggestRules';
 
@@ -160,6 +161,7 @@ function ComponentForm({ machineId, all, item, onClose }: { machineId: string; a
 function Signals({ machineId, readOnly }: { machineId: string; readOnly: boolean }) {
   const q = useQuery({ queryKey: setupKey('signals-all', machineId), queryFn: () => setup.allSignals(machineId) });
   const components = useQuery({ queryKey: setupKey('components-all', machineId), queryFn: () => setup.allComponents(machineId) });
+  const units = useQuery({ queryKey: setupKey('measurement-units'), queryFn: setup.measurementUnits, staleTime: Infinity });
   const [edit, setEdit] = useState<TelemetrySignal | 'new' | null>(null);
   const status = useStatusMutation<TelemetrySignal>(setup.setSignalStatus, 'Сигнал');
   const items = q.data ?? [];
@@ -189,12 +191,12 @@ function Signals({ machineId, readOnly }: { machineId: string; readOnly: boolean
           </Table>
         </Table.ScrollContainer>
       </Panel>
-      {edit && <SignalForm key={edit === 'new' ? 'new' : edit.id} machineId={machineId} components={(components.data ?? []).filter((c) => c.status === 'ACTIVE')} item={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
+      {edit && <SignalForm key={edit === 'new' ? 'new' : edit.id} machineId={machineId} components={(components.data ?? []).filter((c) => c.status === 'ACTIVE')} units={units.data ?? []} item={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
     </Stack>
   );
 }
 
-function SignalForm({ machineId, components, item, onClose }: { machineId: string; components: ComponentT[]; item: TelemetrySignal | null; onClose: () => void }) {
+function SignalForm({ machineId, components, units, item, onClose }: { machineId: string; components: ComponentT[]; units: MeasurementUnit[]; item: TelemetrySignal | null; onClose: () => void }) {
   const [v, setV] = useState({
     code: item?.code ?? '', name: item?.name ?? '', description: item?.description ?? '',
     valueType: item?.valueType ?? 'DOUBLE', signalKind: item?.signalKind ?? 'GAUGE', semanticCode: item?.semanticCode ?? 'TEMPERATURE',
@@ -231,7 +233,7 @@ function SignalForm({ machineId, components, item, onClose }: { machineId: strin
             <NativeSelect label="Семантика" value={v.semanticCode} data={semantics} error={fe('semanticCode')} onChange={(e) => patch({ semanticCode: e.currentTarget.value })} />
             {v.semanticCode === 'CUSTOM' && <TextInput label="Своя семантика" value={v.customSemanticCode} onChange={(e) => patch({ customSemanticCode: e.currentTarget.value })} />}
             <NativeSelect label="Компонент" value={v.componentId} data={[{ value: '', label: 'Без компонента' }, ...components.map((c) => ({ value: c.id, label: c.name }))]} onChange={(e) => patch({ componentId: e.currentTarget.value })} />
-            {numeric && <TextInput label="Единица" value={v.unitCode} error={fe('unitCode')} onChange={(e) => patch({ unitCode: e.currentTarget.value })} />}
+            {numeric && <NativeSelect label="Единица" value={v.unitCode} error={fe('unitCode')} data={unitOptions(units, v.unitCode, 'Без единицы')} onChange={(e) => patch({ unitCode: e.currentTarget.value })} />}
             <NumberInput label="Ожидаемый период, мс" min={1} value={v.expectedIntervalMs} onChange={(x) => patch({ expectedIntervalMs: x === '' ? '' : Number(x) })} />
             <NumberInput label="Устаревает через, мс" min={1} value={v.staleAfterMs} onChange={(x) => patch({ staleAfterMs: x === '' ? '' : Number(x) })} />
             {numeric && <NumberInput label="Допустимый минимум" value={v.validMin} onChange={(x) => patch({ validMin: x === '' ? '' : Number(x) })} />}

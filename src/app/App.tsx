@@ -10,13 +10,16 @@ import { Notifications } from '@mantine/notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { DashboardRegistryProvider } from '@/shared/ui';
+import { shouldRetryRequest } from '@/shared/api';
 import { dashboardRegistry } from './dashboard-registry';
 import { router } from './router';
 import { theme } from './theme';
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 15_000, retry: 1, refetchOnWindowFocus: false },
+    queries: { staleTime: 15_000, retry: shouldRetryRequest, refetchOnWindowFocus: false },
+    // Mutations are not idempotent in general (machine/signal create), so they are never retried automatically.
+    mutations: { retry: false },
   },
 });
 

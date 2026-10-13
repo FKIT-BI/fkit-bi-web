@@ -37,7 +37,7 @@ describe('страница генерации', () => {
     await waitFor(() => expect(screen.getAllByText('Выполняется').length).toBeGreaterThan(0));
     await user.click(screen.getAllByRole('button', { name: 'Остановить' })[0]);
     await waitFor(() => expect(screen.getAllByText(/Останавливается|Остановлен/).length).toBeGreaterThan(0));
-  });
+  }, 15_000); // full editor + run flow; ~2.4s locally, CI runners are ~2.5x slower
 
   it('создаёт сценарий и сообщает об ошибках валидации сервера', async () => {
     const user = userEvent.setup();

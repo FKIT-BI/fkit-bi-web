@@ -11,6 +11,7 @@ export type ProductionLine = S['ProductionLine'];
 export type Machine = S['Machine'];
 export type TypedParameter = S['TypedParameter'];
 export type TelemetrySignal = S['TelemetrySignal'];
+export type MeasurementUnit = S['MeasurementUnit'];
 export type EquipmentTree = S['EquipmentTree'];
 export type EquipmentTreeMachine = S['EquipmentTreeMachine'];
 export type CurrentState = S['CurrentState'];

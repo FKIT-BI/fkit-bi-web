@@ -70,6 +70,20 @@ async function allIntervals(machineId: string, p: RangeParams, f: IntervalFilter
   return { items, truncated: true };
 }
 
+export async function allCursorItems<T>(load: (cursor?: string) => Promise<{ items: T[]; cursor: { hasMore: boolean; nextCursor?: string | null } }>) {
+  const items: T[] = [];
+  const seen = new Set<string>();
+  let cursor: string | undefined;
+  for (;;) {
+    const page = await load(cursor);
+    items.push(...page.items);
+    if (!page.cursor.hasMore || !page.cursor.nextCursor) return items;
+    if (seen.has(page.cursor.nextCursor)) throw new Error('Сервис вернул повторяющийся cursor');
+    seen.add(page.cursor.nextCursor);
+    cursor = page.cursor.nextCursor;
+  }
+}
+
 export const api = {
   login: (body: LoginRequest) => unwrap(A.POST('/auth/login', { body })),
 
@@ -165,31 +179,31 @@ export const api = {
   machineIncidents: (machineId: string, p: { from: number; to: number }) =>
     queryOptions({
       queryKey: [...qk.incidents, 'machine', machineId, p],
-      queryFn: async ({ signal }) =>
-        (
-          await unwrap(
+      queryFn: ({ signal }) =>
+        allCursorItems((cursor) =>
+          unwrap(
             A.GET('/machines/{machineId}/incidents', {
-              params: { path: { machineId }, query: { from: toIso(p.from), to: toIso(p.to), limit: 500 } },
+              params: { path: { machineId }, query: { from: toIso(p.from), to: toIso(p.to), limit: 500, cursor } },
               signal,
             }),
-          )
-        ).items,
+          ),
+        ),
     }),
   enterpriseIncidents: (enterpriseId: string, p: { from: number; to: number; machineId?: string; ongoing?: boolean }) =>
     queryOptions({
       queryKey: [...qk.incidents, 'enterprise', enterpriseId, p],
-      queryFn: async ({ signal }) =>
-        (
-          await unwrap(
+      queryFn: ({ signal }) =>
+        allCursorItems((cursor) =>
+          unwrap(
             A.GET('/enterprises/{enterpriseId}/incidents', {
               params: {
                 path: { enterpriseId },
-                query: { from: toIso(p.from), to: toIso(p.to), machineId: p.machineId, ongoing: p.ongoing, limit: 500 },
+                query: { from: toIso(p.from), to: toIso(p.to), machineId: p.machineId, ongoing: p.ongoing, limit: 500, cursor },
               },
               signal,
             }),
-          )
-        ).items,
+          ),
+        ),
     }),
   createIncident: (machineId: string, body: ManualIncidentCreate, idempotencyKey: string) =>
     unwrap(
@@ -216,6 +230,7 @@ const byStatuses = async <T>(load: (status: ConfigStatus) => Promise<T[]>) => {
 };
 
 export const setup = {
+  measurementUnits: () => unwrap(A.GET('/reference/measurement-units')),
   enterprises: () => allPages((page) => unwrap(A.GET('/enterprises', { params: { query: { page, size: 200 } } }))),
   allEnterprises: () =>
     byStatuses((status) => allPages((page) => unwrap(A.GET('/enterprises', { params: { query: { status, page, size: 200 } } })))),

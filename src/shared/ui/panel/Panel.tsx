@@ -11,6 +11,7 @@ import {
 import { useMediaQuery } from '@mantine/hooks';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from '../../i18n';
+import { formatApiError } from '../../api';
 import { downloadCsv, type Row } from '../csv';
 import classes from './Panel.module.css';
 
@@ -51,7 +52,7 @@ export function Panel({ title, actions, state, rows, exportName, minBodyHeight =
       <div className={classes.center} style={{ minHeight: minBodyHeight }} role="alert">
         <IconAlertTriangle size={28} color="var(--mantine-color-red-6)" />
         <div>{t('panel.error')}</div>
-        <div style={{ fontSize: 12 }}>{state.error instanceof Error ? state.error.message : null}</div>
+        <div style={{ fontSize: 12 }}>{formatApiError(state.error)}</div>
         {state.refetch && (
           <Button size="xs" variant="light" onClick={() => state.refetch?.()}>
             {t('panel.retry')}

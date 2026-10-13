@@ -3,9 +3,10 @@ import { IconListDetails, IconPencil, IconPlus } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useAdminNav } from '@/shared/model';
-import { setup, type Machine, type ProductionLine, type TypedParameter } from '@/shared/api';
+import { setup, type Machine, type MeasurementUnit, type ProductionLine, type TypedParameter } from '@/shared/api';
 import { Panel } from '@/shared/ui';
 import { confirmDisable, FormModal, setupKey, StatusBadge, StatusToggle, useStatusMutation } from './common';
+import { rateUnitError, unitOptions } from './units';
 import { MachineDrawer } from './MachineDrawer';
 import { ParametersEditor } from './ParametersEditor';
 
@@ -14,6 +15,7 @@ const CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
 export function LinesMachinesTab({ enterpriseId, readOnly }: { enterpriseId: string; readOnly: boolean }) {
   const lines = useQuery({ queryKey: setupKey('lines-all', enterpriseId), queryFn: () => setup.allLines(enterpriseId), enabled: !!enterpriseId });
   const machines = useQuery({ queryKey: setupKey('machines', enterpriseId), queryFn: () => setup.machines(enterpriseId), enabled: !!enterpriseId });
+  const units = useQuery({ queryKey: setupKey('measurement-units'), queryFn: setup.measurementUnits, staleTime: Infinity });
   const [lineEdit, setLineEdit] = useState<ProductionLine | 'new' | null>(null);
   const [machineEdit, setMachineEdit] = useState<Machine | 'new' | null>(null);
   const [drawerId, setDrawerId] = useState<string | null>(null);
@@ -93,7 +95,7 @@ export function LinesMachinesTab({ enterpriseId, readOnly }: { enterpriseId: str
       </Stack>
 
       {lineEdit && <LineForm key={lineEdit === 'new' ? 'new' : lineEdit.id} enterpriseId={enterpriseId} item={lineEdit === 'new' ? null : lineEdit} nextOrder={lineList.length} onClose={() => setLineEdit(null)} />}
-      {machineEdit && <MachineForm key={machineEdit === 'new' ? 'new' : machineEdit.id} enterpriseId={enterpriseId} lines={lineList.filter((l) => l.status === 'ACTIVE')} item={machineEdit === 'new' ? null : machineEdit} nextOrder={machineList.length} onClose={() => setMachineEdit(null)} />}
+      {machineEdit && <MachineForm key={machineEdit === 'new' ? 'new' : machineEdit.id} enterpriseId={enterpriseId} lines={lineList.filter((l) => l.status === 'ACTIVE')} units={units.data ?? []} item={machineEdit === 'new' ? null : machineEdit} nextOrder={machineList.length} onClose={() => setMachineEdit(null)} />}
       <MachineDrawer machineId={drawerId} initialTab={drawerTab} readOnly={readOnly} onClose={() => { setDrawerId(null); setDrawerTab('passport'); }} />
     </Stack>
   );
@@ -117,7 +119,7 @@ function LineForm({ enterpriseId, item, nextOrder, onClose }: { enterpriseId: st
   );
 }
 
-function MachineForm({ enterpriseId, lines, item, nextOrder, onClose }: { enterpriseId: string; lines: ProductionLine[]; item: Machine | null; nextOrder: number; onClose: () => void }) {
+function MachineForm({ enterpriseId, lines, units, item, nextOrder, onClose }: { enterpriseId: string; lines: ProductionLine[]; units: MeasurementUnit[]; item: Machine | null; nextOrder: number; onClose: () => void }) {
   const [v, setV] = useState({
     code: item?.code ?? '',
     name: item?.name ?? '',
@@ -134,8 +136,9 @@ function MachineForm({ enterpriseId, lines, item, nextOrder, onClose }: { enterp
   const [params, setParams] = useState<TypedParameter[]>(item?.parameters ?? []);
   const patch = (p: Partial<typeof v>) => setV((x) => ({ ...x, ...p }));
   const text = (s: string) => s.trim() || null;
+  const pairError = rateUnitError(v.nominalRate, v.productionUnit);
   return (
-    <FormModal opened onClose={onClose} size="lg" title={item ? 'Машина' : 'Новая машина'} success={item ? 'Машина сохранена' : 'Машина создана (отключена до активации)'} canSubmit={!!v.name.trim() && (!!item || CODE.test(v.code))}
+    <FormModal opened onClose={onClose} size="lg" title={item ? 'Машина' : 'Новая машина'} success={item ? 'Машина сохранена' : 'Машина создана (отключена до активации)'} canSubmit={!!v.name.trim() && (!!item || CODE.test(v.code)) && !pairError.nominalRate && !pairError.productionUnit}
       submit={() => {
         const common = {
           name: v.name.trim(),
@@ -162,11 +165,11 @@ function MachineForm({ enterpriseId, lines, item, nextOrder, onClose }: { enterp
             <TextInput label="Производитель" value={v.manufacturer} onChange={(e) => patch({ manufacturer: e.currentTarget.value })} />
             <TextInput label="Модель" value={v.model} onChange={(e) => patch({ model: e.currentTarget.value })} />
             <NumberInput label="Год ввода" min={1900} max={9999} allowDecimal={false} value={v.year} error={fe('commissioningYear')} onChange={(x) => patch({ year: x === '' ? '' : Number(x) })} />
-            <NumberInput label="Норма выпуска в час" min={0} value={v.nominalRate} error={fe('nominalRate')} onChange={(x) => patch({ nominalRate: x === '' ? '' : Number(x) })} />
-            <TextInput label="Единица выпуска" value={v.productionUnit} onChange={(e) => patch({ productionUnit: e.currentTarget.value })} />
+            <NumberInput label="Норма выпуска в час" min={0} value={v.nominalRate} error={pairError.nominalRate ?? fe('nominalRate')} onChange={(x) => patch({ nominalRate: x === '' ? '' : Number(x) })} />
+            <NativeSelect label="Единица выпуска" value={v.productionUnit} error={pairError.productionUnit ?? fe('productionUnit')} data={unitOptions(units, v.productionUnit, 'Не выбрана')} onChange={(e) => patch({ productionUnit: e.currentTarget.value })} />
             <NumberInput label="Порядок" min={0} value={v.sortOrder} onChange={(x) => patch({ sortOrder: x === '' ? '' : Number(x) })} />
           </SimpleGrid>
-          <ParametersEditor value={params} onChange={setParams} />
+          <ParametersEditor value={params} units={units} errorFor={fe} onChange={setParams} />
           {fe('parameters') && <Text size="xs" c="red">{fe('parameters')}</Text>}
         </>
       )}

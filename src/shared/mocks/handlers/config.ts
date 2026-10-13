@@ -9,6 +9,18 @@ const matches = (request: Request, ...fields: Array<string | null | undefined>) 
   !search(request) || fields.some((f) => f?.toLowerCase().includes(search(request)));
 
 export const configHandlers = [
+  route('get', '/reference/measurement-units', () =>
+    HttpResponse.json([
+      { code: 'PCS', name: 'Штука', symbol: 'шт', quantityCode: 'COUNT' },
+      { code: 'METER', name: 'Метр', symbol: 'м', quantityCode: 'LENGTH' },
+      { code: 'KILOGRAM', name: 'Килограмм', symbol: 'кг', quantityCode: 'MASS' },
+      { code: 'LITER', name: 'Литр', symbol: 'л', quantityCode: 'VOLUME' },
+      { code: 'CELSIUS', name: 'Градус Цельсия', symbol: '°C', quantityCode: 'TEMPERATURE' },
+      { code: 'PERCENT', name: 'Процент', symbol: '%', quantityCode: 'RATIO' },
+      { code: 'RPM', name: 'Обороты в минуту', symbol: 'об/мин', quantityCode: 'ROTATIONAL_SPEED' },
+      { code: 'BAR', name: 'Бар', symbol: 'бар', quantityCode: 'PRESSURE' },
+    ]),
+  ),
   route('get', '/enterprises', ({ request }) =>
     HttpResponse.json(page(byStatus(db.enterprises, request).filter((e) => matches(request, e.name, e.code)), request)),
   ),

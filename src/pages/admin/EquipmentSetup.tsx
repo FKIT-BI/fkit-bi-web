@@ -18,7 +18,8 @@ import {
 } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { ApiError, setup, type ComponentKind, type MachineStateConfigurationInput, type SignalKind, type SignalValueType, type ValidationIssue } from '@/shared/api';
+import { rateUnitError, unitOptions } from './units';
+import { ApiError, formatApiError, setup, type ComponentKind, type MachineStateConfigurationInput, type SignalKind, type SignalValueType, type ValidationIssue } from '@/shared/api';
 
 export const DRAFT_KEY = 'fkit-bi-setup-draft';
 
@@ -96,14 +97,7 @@ function loadDraft(): Draft {
 }
 
 export function errorMessage(error: unknown) {
-  if (error instanceof ApiError && error.body) {
-    const details = Object.entries(error.body.details ?? {})
-      .filter(([, v]) => v != null)
-      .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : String(v)}`)
-      .join(' · ');
-    return `${error.body.code}: ${error.body.message}${details ? ` (${details})` : ''}`;
-  }
-  return error instanceof Error ? error.message : 'Не удалось выполнить запрос';
+  return formatApiError(error);
 }
 
 const upper = (v: string) => v.toUpperCase();
@@ -141,6 +135,7 @@ export function EquipmentSetup() {
   useEffect(() => sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft)), [draft]);
 
   const enterprises = useQuery({ queryKey: ['setup', 'enterprises'], queryFn: setup.enterprises });
+  const units = useQuery({ queryKey: ['setup', 'measurement-units'], queryFn: setup.measurementUnits, staleTime: Infinity });
   const lines = useQuery({ queryKey: ['setup', 'lines', draft.enterpriseId], queryFn: () => setup.lines(draft.enterpriseId), enabled: !!draft.enterpriseId });
   const machines = useQuery({ queryKey: ['setup', 'machines', draft.enterpriseId], queryFn: () => setup.machines(draft.enterpriseId), enabled: !!draft.enterpriseId });
   const components = useQuery({ queryKey: ['setup', 'components', draft.machineId], queryFn: () => setup.components(draft.machineId), enabled: !!draft.machineId });
@@ -154,7 +149,7 @@ export function EquipmentSetup() {
     if (machines.data && !machines.data.some((m) => m.id === draft.machineId)) patch({ machineId: machines.data[0]?.id ?? '' });
   }, [machines.data, draft.machineId]);
 
-  const loadError = [enterprises, lines, machines, components, signals, readiness].find((q) => q.error)?.error;
+  const loadError = [enterprises, units, lines, machines, components, signals, readiness].find((q) => q.error)?.error;
   const selectedMachine = machines.data?.find((m) => m.id === draft.machineId);
   const unassigned = (machines.data ?? []).filter((m) => !m.lineId);
 
@@ -248,6 +243,7 @@ export function EquipmentSetup() {
     );
 
   const fe = (path: string) => fieldErrors[path];
+  const machinePairError = rateUnitError(draft.nominalRate, draft.productionUnit);
 
   return (
     <Stack gap="sm" maw={1100} mx="auto" w="100%">
@@ -371,10 +367,10 @@ export function EquipmentSetup() {
                   <TextInput label="Код" required pattern={CODE_PATTERN} value={draft.machineCode} onChange={(e) => patch({ machineCode: upper(e.currentTarget.value) })} />
                   <TextInput label="Название" required maxLength={200} value={draft.machineName} onChange={(e) => patch({ machineName: e.currentTarget.value })} />
                   <SimpleGrid cols={2} spacing="xs">
-                    <NumberInput label="Норма выпуска" min={0} decimalScale={6} value={draft.nominalRate} onChange={(v) => patch({ nominalRate: String(v ?? '') })} />
-                    <TextInput label="Единица выпуска" placeholder="шт/ч" value={draft.productionUnit} onChange={(e) => patch({ productionUnit: e.currentTarget.value })} />
+                    <NumberInput label="Норма выпуска" min={0} decimalScale={6} value={draft.nominalRate} error={machinePairError.nominalRate ?? fe('nominalRate')} onChange={(v) => patch({ nominalRate: String(v ?? '') })} />
+                    <NativeSelect label="Единица выпуска" value={draft.productionUnit} error={machinePairError.productionUnit ?? fe('productionUnit')} data={unitOptions(units.data ?? [], draft.productionUnit, 'Не выбрана')} onChange={(e) => patch({ productionUnit: e.currentTarget.value })} />
                   </SimpleGrid>
-                  <Button type="submit" disabled={busy}>
+                  <Button type="submit" disabled={busy || !!machinePairError.nominalRate || !!machinePairError.productionUnit}>
                     Создать DISABLED
                   </Button>
                 </Stack>
@@ -505,12 +501,12 @@ export function EquipmentSetup() {
                       onChange={(e) => patch({ signalKind: e.currentTarget.value })}
                     />
                     <NativeSelect label="Семантика" data={SIGNAL_SEMANTICS} value={draft.semanticCode} onChange={(e) => patch({ semanticCode: e.currentTarget.value })} />
-                    <TextInput
+                    <NativeSelect
                       label="Единица"
-                      placeholder="необязательно"
                       disabled={!NUMERIC.includes(draft.valueType)}
                       value={draft.unitCode}
-                      onChange={(e) => patch({ unitCode: upper(e.currentTarget.value) })}
+                      data={unitOptions(units.data ?? [], draft.unitCode, 'Без единицы')}
+                      onChange={(e) => patch({ unitCode: e.currentTarget.value })}
                     />
                   </SimpleGrid>
                   <Button type="submit" disabled={busy}>

@@ -1,0 +1,21 @@
+# WEB-004 — справочник единиц, понятные ошибки, cursor и retry
+
+Спека: `fkit-bi-infra/docs/bmad/implementation-artifacts/spec-stable-analytics-api-and-readable-errors.md`.
+
+## Реализовано
+
+- `openapi/analytics-api.yaml` синхронизирован с `fkit-bi-analytics/docs/contracts/analytics-api-draft.yaml` (локально: стенд ещё не обновлён), типы перегенерированы `openapi-typescript`.
+- Единицы: `setup.measurementUnits` (`GET /reference/measurement-units`); в формах машины, сигнала, параметров и мастера настройки свободный ввод заменён селектором «Название (символ)», в запрос уходит `code`. Неактивная текущая единица остаётся в списке с пометкой.
+- Норма/единица проверяются как пара до отправки (`pages/admin/units.ts`); нулевая или отрицательная норма блокирует сохранение. Ошибки backend `fieldErrors[].path` показываются у поля, включая `parameters[i].unitCode`.
+- `formatApiError`: русский текст backend либо понятный текст по коду/статусу, `traceId` как «код обращения»; технический `code` и сырой текст не показываются. Используется в Panel и формах админки.
+- Retry: queries повторяются не больше 2 раз только для сети, 429 и 5xx; 4xx и abort не повторяются. Mutations не повторяются (create не идемпотентны).
+- Журнал инцидентов (машины и предприятия) загружает все cursor-страницы по 500 (`allCursorItems`), защищён от зацикленного cursor, ошибки не маскируются.
+
+## Проверка
+
+- `npm test` — 79 tests passed; `npm run typecheck`, `npm run lint`, `npm run build` — без ошибок.
+- Тесты: retry policy, форматирование ошибок, объединение 1203 элементов из cursor-страниц, unit options и пара rate/unit, UI-тест формы машины (селектор + блокировка неполной пары).
+
+## Остаток
+
+- После деплоя Analytics: `npm run api:sync` должен дать тот же YAML; повторить сценарии HAR на DEV.
