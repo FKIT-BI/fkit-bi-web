@@ -11,3 +11,9 @@
 ## Состояние проверки
 
 Типовая проверка и production build выполняются после завершения работы по Epic 2, как указано в его спецификации.
+
+## Перенос в WEB-BI
+
+Экран перенесён в раздел «Администрирование» (`src/pages/admin/EquipmentSetup.tsx`) на общий API-клиент
+(`src/shared/api`, базовый путь `/api/analytics/api/v1`) и Mantine; шаги, тексты, черновик в `sessionStorage`
+и тесты сохранены (`EquipmentSetup.test.tsx`). Типы генерируются `npm run generate:api` из `openapi/analytics-api.yaml`.
