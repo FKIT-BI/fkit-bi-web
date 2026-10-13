@@ -20,7 +20,8 @@ export function resolvePeriod(
   switch (preset) {
     case 'shift': {
       const s = shiftAt(now, tz, shifts);
-      return { from: s.from, to: s.to };
+      // у нового предприятия смен может не быть — показываем сутки
+      return s ? { from: s.from, to: s.to } : { from: today.valueOf(), to: today.add(1, 'day').valueOf() };
     }
     case 'today':
       return { from: today.valueOf(), to: today.add(1, 'day').valueOf() };

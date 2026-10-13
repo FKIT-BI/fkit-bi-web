@@ -26,3 +26,4 @@ export const USER_BY_ROLE: Record<Role, string> = {
   master: 'Мастер смены',
   viewer: 'Наблюдатель',
 };
+export const canAdminister = (r: Role) => r === 'admin';

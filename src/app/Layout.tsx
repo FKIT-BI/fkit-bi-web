@@ -27,6 +27,9 @@ export function Layout() {
     if (treeEnterpriseId !== enterpriseId) setEnterpriseId(treeEnterpriseId);
   }, [treeEnterpriseId, enterpriseId, setEnterpriseId]);
   const kiosk = !!search.kiosk;
+  // дерево машин и фильтры периода нужны только в мониторинге; портал и администрирование работают без выбранного предприятия
+  const monitoring = path === '/overview' || path.startsWith('/machines/') || path === '/incidents';
+  const needsEnterprise = path !== '/' && path !== '/admin';
   useAutoRefresh();
   useHotkeys([['Escape', () => kiosk && update({ kiosk: undefined })]]);
   const [lastPath, setLastPath] = useState(path);
@@ -37,34 +40,41 @@ export function Layout() {
 
   if (!token) return <Navigate to="/login" search={{ redirect: href }} />;
 
-  if (!tree.isReady || enterpriseId !== tree.enterprise?.id) {
+  // нет ни одного активного предприятия — создаётся на портале
+  if (needsEnterprise && !tree.isLoading && !tree.isError && !tree.enterprise) return <Navigate to="/" replace />;
+
+  if (needsEnterprise && (!tree.isReady || enterpriseId !== tree.enterprise?.id)) {
     return (
       <Center h="100vh">
-        {tree.isError ? <Text c="red">Не удалось загрузить предприятие: {tree.error?.message}</Text> : tree.isLoading || tree.enterprise ? <Loader /> : <Text c="dimmed">Нет доступных предприятий</Text>}
+        {tree.isError ? <Text c="red">Не удалось загрузить предприятие: {tree.error?.message}</Text> : <Loader />}
       </Center>
     );
   }
-  setAppTimezone(tree.timezone ?? tree.enterprise.timezone);
-  setAppShifts(tree.shifts);
+  if (tree.enterprise) {
+    setAppTimezone(tree.timezone ?? tree.enterprise.timezone);
+    setAppShifts(tree.shifts);
+  }
 
   return (
     <AppShell
       header={{ height: 48, collapsed: kiosk }}
-      navbar={{
-        width: { base: 300, md: 260 },
-        breakpoint: 'md',
-        collapsed: { mobile: kiosk || !mobileOpened, desktop: kiosk || collapsed },
-      }}
+      navbar={
+        monitoring
+          ? { width: { base: 300, md: 260 }, breakpoint: 'md', collapsed: { mobile: kiosk || !mobileOpened, desktop: kiosk || collapsed } }
+          : { width: 0, breakpoint: 'md', collapsed: { mobile: true, desktop: true } }
+      }
       padding={{ base: 6, sm: 8 }}
     >
       <AppShell.Header style={chrome}>
-        <AppHeader mobileOpened={mobileOpened} onToggleMobile={mobile.toggle} />
+        <AppHeader showSidebar={monitoring} mobileOpened={mobileOpened} onToggleMobile={mobile.toggle} />
       </AppShell.Header>
-      <AppShell.Navbar style={chrome}>
-        <SidebarTree />
-      </AppShell.Navbar>
+      {monitoring && (
+        <AppShell.Navbar style={chrome}>
+          <SidebarTree />
+        </AppShell.Navbar>
+      )}
       <AppShell.Main>
-        {!kiosk && path !== '/admin' && <DashboardToolbar />}
+        {!kiosk && monitoring && <DashboardToolbar />}
         <Outlet />
       </AppShell.Main>
       <IncidentModal />

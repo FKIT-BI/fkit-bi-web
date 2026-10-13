@@ -17,6 +17,15 @@ const loginRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/login')),
 });
 
+// старый адрес портала
+const portalAliasRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/portal',
+  beforeLoad: () => {
+    throw redirect({ to: '/' });
+  },
+});
+
 const appRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'app',
@@ -26,9 +35,15 @@ const appRoute = createRoute({
   },
 });
 
-const overviewRoute = createRoute({
+const portalRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/',
+  component: lazyRouteComponent(() => import('@/pages/portal')),
+});
+
+const overviewRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/overview',
   component: lazyRouteComponent(() => import('@/pages/enterprise-overview')),
 });
 
@@ -50,8 +65,14 @@ const adminRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/admin')),
 });
 
+const generatorRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/generator',
+  component: lazyRouteComponent(() => import('@/pages/generator')),
+});
+
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([loginRoute, appRoute.addChildren([overviewRoute, machineRoute, incidentsRoute, adminRoute])]),
+  routeTree: rootRoute.addChildren([loginRoute, portalAliasRoute, appRoute.addChildren([portalRoute, overviewRoute, machineRoute, incidentsRoute, generatorRoute, adminRoute])]),
   defaultPreload: 'intent',
 });
 

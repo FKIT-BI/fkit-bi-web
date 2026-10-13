@@ -4,7 +4,7 @@ import { toIso } from '../../lib/time';
 import { wireMachine } from '../calc';
 import { db } from '../db';
 import type { MockMachine } from '../fixtures';
-import { apiError, notFound, route } from './utils';
+import { apiError, byStatus, notFound, route } from './utils';
 
 type S = components['schemas'];
 type FieldError = { path: string; code: string; message: string };
@@ -156,9 +156,9 @@ export const setupHandlers = [
     }
     return HttpResponse.json({ items: machines.map((m) => wireMachine(m!)) });
   }),
-  route('get', '/machines/:machineId/components', ({ params }) => {
+  route('get', '/machines/:machineId/components', ({ params, request }) => {
     if (!db.machine(params.machineId as string)) return notFound('Машина');
-    return HttpResponse.json({ items: db.components.get(params.machineId as string) ?? [] });
+    return HttpResponse.json({ items: byStatus(db.components.get(params.machineId as string) ?? [], request) });
   }),
   route('post', '/machines/:machineId/components', async ({ params, request }) => {
     const m = db.machine(params.machineId as string);

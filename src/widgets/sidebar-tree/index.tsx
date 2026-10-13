@@ -1,5 +1,5 @@
 import { Group, NavLink, ScrollArea, Skeleton, Stack, Text, TextInput } from '@mantine/core';
-import { IconAlertCircle, IconBuildingFactory2, IconLayoutDashboard, IconSearch, IconSettings } from '@tabler/icons-react';
+import { IconBuildingFactory2, IconLayoutDashboard, IconSearch } from '@tabler/icons-react';
 import { Link, useParams, useRouterState } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useEnterpriseTree } from '@/entities/enterprise';
@@ -29,11 +29,11 @@ export function SidebarTree() {
       <ScrollArea style={{ flex: 1 }} px="xs">
         <NavLink
           component={Link}
-          to="/"
+          to="/overview"
           label={tree.enterprise?.name ?? t('nav.overview')}
           description={t('nav.overview')}
           leftSection={<IconBuildingFactory2 size={16} />}
-          active={path === '/'}
+          active={path === '/overview'}
         />
         {tree.isLoading && <Skeleton h={200} mt="xs" />}
         {tree.lines.map((line) => {
@@ -72,10 +72,6 @@ export function SidebarTree() {
           </Text>
         )}
       </ScrollArea>
-      <Stack gap={0} p="xs" style={{ borderTop: '1px solid var(--panel-border)' }}>
-        <NavLink component={Link} to="/incidents" label={t('nav.incidents')} leftSection={<IconAlertCircle size={16} />} active={path === '/incidents'} />
-        <NavLink component={Link} to="/admin" label={t('nav.admin')} leftSection={<IconSettings size={16} />} active={path === '/admin'} />
-      </Stack>
     </Stack>
   );
 }
