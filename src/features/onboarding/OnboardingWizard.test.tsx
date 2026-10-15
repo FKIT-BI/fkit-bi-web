@@ -17,6 +17,8 @@ beforeEach(() => {
 afterEach(cleanup);
 
 const next = () => userEvent.click(screen.getByRole('button', { name: 'Сохранить и далее' }));
+// Сквозные сценарии проходят все шаги мастера — на медленном CI им нужно больше стандартных 5 с.
+const E2E_TIMEOUT = 30_000;
 const heading = (name: string) => screen.findByRole('heading', { name }, { timeout: 3000 });
 
 describe('мастер подключения машины', () => {
@@ -75,7 +77,7 @@ describe('мастер подключения машины', () => {
     await user.click(screen.getByRole('button', { name: /Подключить ещё машину/ }));
     await heading('4. Машина');
     expect(JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? '{}')).toMatchObject({ step: 3, copyFromMachineId: machine!.id, machineId: '' });
-  });
+  }, E2E_TIMEOUT);
 
   it('копирует сигналы и правила с машины-образца', async () => {
     const user = userEvent.setup();
@@ -99,5 +101,5 @@ describe('мастер подключения машины', () => {
     expect(copied.map((s) => s.name).sort()).toEqual(sourceSignals.map((s) => s.name).sort());
     const list = within(screen.getByText('Как будет определяться состояние').parentElement!);
     expect(list.getAllByRole('listitem').length).toBeGreaterThan(2);
-  });
+  }, E2E_TIMEOUT);
 });
