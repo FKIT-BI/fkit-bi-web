@@ -1,15 +1,16 @@
-import { ActionIcon, Alert, Badge, Button, Checkbox, Drawer, Group, List, NativeSelect, NumberInput, SimpleGrid, Stack, Table, Tabs, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Checkbox, Drawer, Group, List, NativeSelect, NumberInput, SimpleGrid, Stack, Table, Tabs, Text, TextInput, Tooltip } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconPencil, IconPlus } from '@tabler/icons-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ApiError, setup, type Component, type ConfigStatus, type MachineStateConfigurationInput, type MeasurementUnit, type TelemetrySignal } from '@/shared/api';
-import { COMPONENT_KIND, COMPONENT_KINDS, enumLabel, enumOptions, fieldLabel, HINT, KINDS_FOR_VALUE_TYPE, MACHINE_STATE, SEMANTIC, SIGNAL_KIND, SIGNAL_SEMANTICS, USER_STATES, VALUE_TYPE, type SignalSemantic } from '@/shared/i18n';
+import { ApiError, setup, type Component, type ConfigStatus, type MachineStateConfigurationInput, type MeasurementUnit, type TelemetrySignal, type ValidationIssue } from '@/shared/api';
+import { COMPONENT_KIND, COMPONENT_KINDS, enumLabel, enumOptions, HINT, KINDS_FOR_VALUE_TYPE, SEMANTIC, SIGNAL_KIND, SIGNAL_SEMANTICS, VALUE_TYPE, type SignalSemantic } from '@/shared/i18n';
+import { unitForSemantic } from '@/features/onboarding/templates';
+import { initialConfig, localIssues, StateRulesEditor } from '@/features/state-rules';
 import { makeCode } from '@/shared/lib';
 import { CodeField, DurationInput, EnumSelect, HintLabel, Panel, useAutoCode } from '@/shared/ui';
 import { confirmDisable, errorMessage, FormModal, setupKey, StatusBadge, StatusToggle, useRefreshConfig, useStatusMutation } from './common';
-import { unitOptions, unitSymbol } from './units';
-import { suggestRules } from './suggestRules';
+import { unitOptions, unitSymbol } from '@/shared/lib';
 
 type ComponentT = Awaited<ReturnType<typeof setup.allComponents>>[number];
 
@@ -224,7 +225,7 @@ function SignalForm({ machineId, components, units, taken, item, onClose }: { ma
     const t = SEMANTIC[semanticCode as SignalSemantic];
     if (item || !t?.valueType || !t.signalKind) return patch({ semanticCode });
     const isNumeric = t.valueType === 'DOUBLE' || t.valueType === 'LONG';
-    patch({ semanticCode, valueType: t.valueType, signalKind: t.signalKind, ...(isNumeric ? {} : { unitCode: '', validMin: '', validMax: '' }) });
+    patch({ semanticCode, valueType: t.valueType, signalKind: t.signalKind, ...(isNumeric ? { unitCode: unitForSemantic(semanticCode, units) ?? '' } : { unitCode: '', validMin: '', validMax: '' }) });
   };
   const pickValueType = (valueType: typeof v.valueType) => {
     const allowed = KINDS_FOR_VALUE_TYPE[valueType];
@@ -274,77 +275,57 @@ function SignalForm({ machineId, components, units, taken, item, onClose }: { ma
   );
 }
 
-const issueText = (e: unknown) =>
-  e instanceof ApiError && e.fieldErrors.length
-    ? [errorMessage(e), ...e.fieldErrors.map((f) => `${fieldLabel(f.path)}: ${f.message}`)]
-    : [errorMessage(e)];
-const PLACEHOLDER = /<[^">]*(uuid|id)[^">]*>|signalId"\s*:\s*"(?![0-9a-fA-F]{8}-)/i;
+/** Ошибки сервера в виде замечаний проверки: у fieldErrors путь вида rules[0]… — редактор покажет их у правила. */
+const apiIssues = (e: unknown): ValidationIssue[] =>
+  e instanceof ApiError && e.fieldErrors.length ? e.fieldErrors.map((f) => ({ code: f.code, message: f.message, path: f.path })) : [{ code: 'ERROR', message: errorMessage(e) }];
 
 function States({ machineId, readOnly }: { machineId: string; readOnly: boolean }) {
-  const refresh = useRefreshConfig();
   const q = useQuery({ queryKey: setupKey('state-config', machineId), queryFn: () => setup.stateConfig(machineId) });
-  const [loadedFor, setLoadedFor] = useState<string | null>(null);
-  const [defaultState, setDefaultState] = useState('IDLE');
-  const [offline, setOffline] = useState<number | ''>(60_000);
-  const [rules, setRules] = useState('[]');
-  const [parseError, setParseError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ ok: boolean; messages: string[] } | null>(null);
-  const key = q.isSuccess ? `${machineId}:${q.dataUpdatedAt}` : null;
-  if (key && key !== loadedFor) {
-    setLoadedFor(key);
-    if (q.data) { setDefaultState(q.data.defaultState); setOffline(q.data.offlineAfterMs); setRules(JSON.stringify(q.data.rules, null, 2)); }
-  }
-  const body = (): MachineStateConfigurationInput | null => {
-    try {
-      setParseError(null);
-      if (PLACEHOLDER.test(rules)) throw new Error('В правилах остались заглушки вместо signalId. Нажмите «Сгенерировать по сигналам» или подставьте идентификаторы сигналов этой машины (вкладка «Сигналы»)');
-      return { defaultState: defaultState as MachineStateConfigurationInput['defaultState'], offlineAfterMs: Number(offline || 0), rules: JSON.parse(rules) };
-    } catch (e) {
-      setParseError((e as Error).message.startsWith('В правилах') ? (e as Error).message : `Некорректный JSON: ${(e as Error).message}`);
-      return null;
-    }
+  const signals = useQuery({ queryKey: setupKey('signals-all', machineId), queryFn: () => setup.allSignals(machineId) });
+  if (q.isLoading || signals.isLoading) return <Text c="dimmed">Загрузка…</Text>;
+  if (q.isError || signals.isError) return <Alert color="red" p="xs">{errorMessage(q.error ?? signals.error)}</Alert>;
+  return <StatesForm key={`${machineId}:${q.dataUpdatedAt}`} machineId={machineId} readOnly={readOnly} saved={q.data ?? null} signals={signals.data ?? []} />;
+}
+
+function StatesForm({ machineId, readOnly, saved, signals }: { machineId: string; readOnly: boolean; saved: MachineStateConfigurationInput | null; signals: TelemetrySignal[] }) {
+  const refresh = useRefreshConfig();
+  const [cfg, setCfg] = useState<MachineStateConfigurationInput>(() =>
+    saved ? { defaultState: saved.defaultState, offlineAfterMs: saved.offlineAfterMs, rules: saved.rules } : initialConfig(signals),
+  );
+  const [issues, setIssues] = useState<ValidationIssue[]>([]);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const change = (next: MachineStateConfigurationInput) => {
+    setCfg(next);
+    setResult(null);
   };
-  const generate = useMutation({
-    mutationFn: () => setup.allSignals(machineId),
-    onSuccess: (signals) => {
-      if (rules.trim() !== '[]' && rules.trim() !== '' && !window.confirm('Заменить текущие правила сгенерированным черновиком?')) return;
-      const { config, notes } = suggestRules(signals);
-      setDefaultState(config.defaultState);
-      setOffline(config.offlineAfterMs);
-      setRules(JSON.stringify(config.rules, null, 2));
-      setParseError(null);
-      setResult({ ok: config.rules.length > 0, messages: [config.rules.length ? `Сгенерировано правил: ${config.rules.length}. Проверьте пороги и нажмите «Проверить».` : 'Правила не созданы', ...notes] });
-    },
-    onError: (e) => setResult({ ok: false, messages: issueText(e) }),
-  });
   const validate = useMutation({
-    mutationFn: async () => { const b = body(); return b ? setup.validateState(machineId, b) : null; },
-    onSuccess: (r) => r && setResult({ ok: r.valid, messages: [...r.errors.map((e) => `Ошибка: ${e.message}${e.path ? ` (${e.path})` : ''}`), ...r.warnings.map((e) => `Предупреждение: ${e.message}`)] }),
-    onError: (e) => setResult({ ok: false, messages: issueText(e) }),
+    mutationFn: () => setup.validateState(machineId, cfg),
+    onSuccess: (r) => {
+      setIssues([...r.errors, ...r.warnings]);
+      setResult(r.valid ? { ok: true, text: r.warnings.length ? 'Проверка пройдена, есть предупреждения.' : 'Проверка пройдена.' } : { ok: false, text: 'Исправьте ошибки в правилах.' });
+    },
+    onError: (e) => { setIssues(apiIssues(e)); setResult({ ok: false, text: errorMessage(e) }); },
   });
   const save = useMutation({
-    mutationFn: async () => { const b = body(); return b ? setup.saveState(machineId, b) : null; },
-    onSuccess: async (r) => { if (r) { await refresh(); setResult({ ok: true, messages: ['Правила сохранены'] }); } },
-    onError: (e) => setResult({ ok: false, messages: issueText(e) }),
+    mutationFn: async () => {
+      const checked = await setup.validateState(machineId, cfg);
+      setIssues([...checked.errors, ...checked.warnings]);
+      if (!checked.valid) throw new Error('Исправьте ошибки в правилах.');
+      return setup.saveState(machineId, cfg);
+    },
+    onSuccess: async () => { setResult({ ok: true, text: 'Правила сохранены.' }); await refresh(); },
+    onError: (e) => { if (e instanceof ApiError) setIssues(apiIssues(e)); setResult({ ok: false, text: e instanceof ApiError ? errorMessage(e) : (e as Error).message }); },
   });
+  const blocked = localIssues(cfg, signals.filter((s) => s.status === 'ACTIVE')).size > 0;
   return (
     <Stack gap="sm">
-      {!q.isLoading && !q.data && <Alert color="gray" p="xs">Правила ещё не заданы. Без них машину нельзя активировать.</Alert>}
-      <SimpleGrid cols={2}>
-        <EnumSelect label="Состояние по умолчанию" hint={HINT.defaultState} disabled={readOnly} options={enumOptions(MACHINE_STATE, USER_STATES)} value={defaultState} onChange={setDefaultState} />
-        <DurationInput label="«Нет данных» через" hint={HINT.offlineAfter} disabled={readOnly} min={1} value={offline} onChange={setOffline} />
-      </SimpleGrid>
-      <Textarea label="Правила (JSON)" description="Пока правила задаются в JSON. Нажмите «Сгенерировать по сигналам», чтобы получить черновик, затем «Проверить». Состояния: RUN — Работа, IDLE — Простой, DOWN — Авария, SETUP — Переналадка, PLANNED_STOP — Плановая остановка" disabled={readOnly} autosize minRows={10} maxRows={24} styles={{ input: { fontFamily: 'ui-monospace, monospace' } }} value={rules} onChange={(e) => setRules(e.currentTarget.value)} error={parseError} />
-      {result && (
-        <Alert color={result.ok ? 'green' : 'red'} p="xs">
-          {result.messages.length ? result.messages.map((m, i) => <Text key={i} size="sm">{m}</Text>) : <Text size="sm">Проверка пройдена</Text>}
-        </Alert>
-      )}
+      {!saved && <Alert color="gray" p="xs">Правила ещё не сохранены — ниже предложение по сигналам машины. Без правил машину нельзя подключить к мониторингу.</Alert>}
+      <StateRulesEditor signals={signals} value={cfg} onChange={change} readOnly={readOnly} issues={issues} />
+      {result && <Alert color={result.ok ? 'green' : 'red'} p="xs"><Text size="sm">{result.text}</Text></Alert>}
       {!readOnly && (
         <Group justify="flex-end">
-          <Button variant="subtle" loading={generate.isPending} onClick={() => generate.mutate()}>Сгенерировать по сигналам</Button>
-          <Button variant="light" loading={validate.isPending} onClick={() => validate.mutate()}>Проверить</Button>
-          <Button loading={save.isPending} onClick={() => save.mutate()}>Сохранить</Button>
+          <Button variant="light" loading={validate.isPending} disabled={blocked} onClick={() => validate.mutate()}>Проверить</Button>
+          <Button loading={save.isPending} disabled={blocked} onClick={() => save.mutate()}>Сохранить</Button>
         </Group>
       )}
     </Stack>

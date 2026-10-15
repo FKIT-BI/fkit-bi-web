@@ -253,6 +253,37 @@ export const TIMEZONE: Record<string, Term> = {
   'Asia/Kamchatka': { label: 'Камчатка (UTC+12)' },
 };
 
+// ---------- Единицы измерения ----------
+
+/** Русские названия и символы единиц справочника (backend отдаёт их по-английски). Неизвестный код — данные сервера. */
+export const UNIT: Record<string, Term & { symbol: string }> = {
+  PCS: { label: 'Штука', symbol: 'шт' },
+  METER: { label: 'Метр', symbol: 'м' },
+  KILOGRAM: { label: 'Килограмм', symbol: 'кг' },
+  LITER: { label: 'Литр', symbol: 'л' },
+  CELSIUS: { label: 'Градус Цельсия', symbol: '°C' },
+  PERCENT: { label: 'Процент', symbol: '%' },
+  RPM: { label: 'Обороты в минуту', symbol: 'об/мин' },
+  BAR: { label: 'Бар', symbol: 'бар' },
+};
+
+/** Символ единицы для показа: «CELSIUS» → «°C»; неизвестный код остаётся как есть. */
+export const unitLabel = (code: string | null | undefined) => (code ? (UNIT[code]?.symbol ?? code) : '');
+
+/** Какая величина справочника единиц (`quantityCode`) подходит семантике сигнала. */
+export const SEMANTIC_QUANTITY: Partial<Record<SignalSemantic, string>> = {
+  TEMPERATURE: 'TEMPERATURE',
+  PRESSURE: 'PRESSURE',
+  ROTATIONAL_SPEED: 'ROTATIONAL_SPEED',
+  LEVEL: 'RATIO',
+  HUMIDITY: 'RATIO',
+  LOAD_PERCENT: 'RATIO',
+  PRODUCTION_COUNT: 'COUNT',
+  SCRAP_COUNT: 'COUNT',
+  CYCLE_COUNT: 'COUNT',
+  DISTANCE: 'LENGTH',
+};
+
 // ---------- Поля форм (для ошибок сервера по fieldErrors[].path) ----------
 
 const FIELD: Record<string, string> = {

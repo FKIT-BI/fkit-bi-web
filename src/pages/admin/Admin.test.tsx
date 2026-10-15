@@ -12,6 +12,7 @@ describe('администрирование', () => {
   it('предприятия: список и редактирование названия', async () => {
     const user = userEvent.setup();
     await renderPage(<AdminPage />);
+    await user.click(await screen.findByRole('tab', { name: 'Предприятия' }));
     expect(await screen.findByText('Завод полимерной упаковки')).toBeTruthy();
     await user.click(screen.getByLabelText('Редактировать'));
     const dialog = await screen.findByRole('dialog', { name: 'Предприятие' });

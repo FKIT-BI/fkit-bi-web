@@ -1,17 +1,17 @@
 import { ActionIcon, Autocomplete, Badge, Button, Group, NativeSelect, NumberInput, SimpleGrid, Stack, Table, Text, TextInput, Tooltip } from '@mantine/core';
-import { IconListDetails, IconPencil, IconPlus } from '@tabler/icons-react';
+import { IconListDetails, IconPencil, IconPlus, IconWand } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useAdminNav } from '@/shared/model';
 import { setup, type Machine, type MeasurementUnit, type ProductionLine, type TypedParameter } from '@/shared/api';
+import { MACHINE_TYPES } from '@/features/onboarding/templates';
 import { HINT } from '@/shared/i18n';
 import { CodeField, HintLabel, Panel, useAutoCode } from '@/shared/ui';
 import { confirmDisable, FormModal, setupKey, StatusBadge, StatusToggle, useStatusMutation } from './common';
-import { rateUnitError, unitOptions, unitSymbol } from './units';
+import { rateUnitError, unitOptions, unitSymbol } from '@/shared/lib';
 import { MachineDrawer } from './MachineDrawer';
 import { ParametersEditor } from './ParametersEditor';
 
-const MACHINE_TYPES = ['Экструдер', 'Пресс', 'Термопластавтомат', 'Упаковочная машина', 'Станок ЧПУ', 'Конвейер', 'Миксер', 'Печатная машина', 'Ламинатор', 'Резательная машина'];
 
 export function LinesMachinesTab({ enterpriseId, readOnly }: { enterpriseId: string; readOnly: boolean }) {
   const lines = useQuery({ queryKey: setupKey('lines-all', enterpriseId), queryFn: () => setup.allLines(enterpriseId), enabled: !!enterpriseId });
@@ -82,7 +82,8 @@ export function LinesMachinesTab({ enterpriseId, readOnly }: { enterpriseId: str
                     <Table.Td><StatusBadge machine status={m.status} /></Table.Td>
                     <Table.Td>
                       <Group gap={2} justify="flex-end" wrap="nowrap">
-                        <Tooltip label="Компоненты, сигналы, правила состояний"><ActionIcon variant="subtle" aria-label="Детали машины" onClick={() => { setDrawerTab('passport'); setDrawerId(m.id); }}><IconListDetails size={16} /></ActionIcon></Tooltip>
+                        {!readOnly && m.status !== 'ACTIVE' && <Tooltip label="Продолжить настройку в мастере"><ActionIcon variant="subtle" color="orange" aria-label="Продолжить настройку" onClick={() => nav.resumeMachine(m.id)}><IconWand size={16} /></ActionIcon></Tooltip>}
+                        <Tooltip label="Узлы, сигналы, правила состояний"><ActionIcon variant="subtle" aria-label="Детали машины" onClick={() => { setDrawerTab('passport'); setDrawerId(m.id); }}><IconListDetails size={16} /></ActionIcon></Tooltip>
                         {!readOnly && <ActionIcon variant="subtle" aria-label="Редактировать машину" onClick={() => setMachineEdit(m)}><IconPencil size={16} /></ActionIcon>}
                         {!readOnly && <StatusToggle status={m.status} loading={machineStatus.isPending && machineStatus.variables?.item.id === m.id} onToggle={(next) => confirmDisable(m.name, next) && machineStatus.mutate({ item: m, status: next })} />}
                       </Group>

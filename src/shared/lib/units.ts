@@ -1,8 +1,12 @@
 import type { MeasurementUnit } from '@/shared/api';
+import { UNIT } from '@/shared/i18n';
+
+const nameOf = (u: MeasurementUnit) => UNIT[u.code]?.label ?? u.name;
+const symbolOf = (u: MeasurementUnit) => UNIT[u.code]?.symbol ?? u.symbol ?? '';
 
 /** Options for a unit selector: the backend catalog plus the current code if it is no longer active. */
 export function unitOptions(units: MeasurementUnit[], current: string | null | undefined, emptyLabel: string) {
-  const options = units.map((u) => ({ value: u.code, label: `${u.name}${u.symbol ? ` (${u.symbol})` : ''}` }));
+  const options = units.map((u) => ({ value: u.code, label: `${nameOf(u)}${symbolOf(u) ? ` (${symbolOf(u)})` : ''}` }));
   if (current && !units.some((u) => u.code === current)) options.push({ value: current, label: `${current} (неактивна)` });
   return [{ value: '', label: emptyLabel }, ...options];
 }
@@ -19,6 +23,7 @@ export function rateUnitError(rate: number | string | null | undefined, unit: st
 /** Unit code → symbol for display («CELSIUS» → «°C»); unknown codes are shown as is. */
 export function unitSymbol(units: MeasurementUnit[], code: string | null | undefined) {
   if (!code) return '';
+  if (UNIT[code]) return UNIT[code].symbol;
   const u = units.find((x) => x.code === code);
-  return u ? u.symbol || u.name : code;
+  return u ? symbolOf(u) || nameOf(u) : code;
 }

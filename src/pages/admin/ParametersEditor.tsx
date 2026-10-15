@@ -2,7 +2,7 @@ import { ActionIcon, Button, Group, NativeSelect, NumberInput, Stack, Switch, Te
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 import type { MeasurementUnit, TypedParameter } from '@/shared/api';
 import { makeCode } from '@/shared/lib';
-import { unitOptions } from './units';
+import { unitOptions } from '@/shared/lib';
 
 type Row = { code: string; name: string; valueType: 'STRING' | 'NUMBER' | 'BOOLEAN'; value: string | number | boolean; unitCode?: string | null; sortOrder: number };
 

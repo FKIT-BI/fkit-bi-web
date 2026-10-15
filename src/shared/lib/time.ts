@@ -80,3 +80,14 @@ export const addDaysToDate = (date: string, n: number) =>
 
 export const parseLocal = (value: string, tz = appTz) => dayjs.tz(value, 'YYYY-MM-DD HH:mm:ss', tz).valueOf();
 export const toLocalString = (ms: number, tz = appTz) => inTz(ms, tz).format('YYYY-MM-DD HH:mm:ss');
+
+/** «30 с», «1 мин», «1 ч 30 мин» для длительностей в миллисекундах. */
+export function formatMs(ms: number | null | undefined): string {
+  if (ms == null || !Number.isFinite(ms)) return '—';
+  if (ms < 1000) return `${ms} мс`;
+  const sec = Math.round(ms / 1000);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return [h && `${h} ч`, m && `${m} мин`, s && `${s} с`].filter(Boolean).join(' ') || '0 с';
+}

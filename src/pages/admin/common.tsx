@@ -4,11 +4,9 @@ import { notifications } from '@mantine/notifications';
 import { IconPower } from '@tabler/icons-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
-import { ApiError, qk, type ConfigStatus } from '@/shared/api';
+import { ApiError, formatApiError, qk, type ConfigStatus } from '@/shared/api';
 import { CONFIG_STATUS, fieldLabel, MACHINE_STATUS } from '@/shared/i18n';
-import { errorMessage } from './EquipmentSetup';
-
-export { errorMessage };
+export const errorMessage = (error: unknown) => formatApiError(error);
 
 export const setupKey = (...parts: string[]) => ['setup', ...parts] as const;
 

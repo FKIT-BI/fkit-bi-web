@@ -37,7 +37,7 @@ describe('каркас приложения', () => {
 
     await user.click(screen.getByRole('link', { name: 'Администрирование' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/admin'));
-    expect(await screen.findByRole('tab', { name: 'Настройка' })).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: 'Подключить машину' })).toBeTruthy();
     expect(screen.queryByPlaceholderText('Поиск машины')).toBeNull();
 
     await user.click(screen.getByRole('link', { name: 'Инциденты' }));

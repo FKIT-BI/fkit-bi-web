@@ -21,13 +21,20 @@ export const useAdminNav = create<{
   setTab: (tab: string) => void;
   openMachine: (machineId: string, machineTab: 'passport' | 'components' | 'signals' | 'states') => void;
   clearMachine: () => void;
+  /** Машина, настройку которой нужно продолжить в мастере «Подключить машину». */
+  resumeId: string | null;
+  resumeMachine: (machineId: string) => void;
+  clearResume: () => void;
 }>((set) => ({
-  tab: 'enterprises',
+  tab: 'setup',
   machineId: null,
   machineTab: 'passport',
   setTab: (tab) => set({ tab }),
   openMachine: (machineId, machineTab) => set({ tab: 'equipment', machineId, machineTab }),
   clearMachine: () => set({ machineId: null }),
+  resumeId: null,
+  resumeMachine: (resumeId) => set({ tab: 'wizard', resumeId }),
+  clearResume: () => set({ resumeId: null }),
 }));
 
 /** Куда открыть страницу генерации (например, после быстрого запуска — на карточку запуска). */

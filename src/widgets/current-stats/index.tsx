@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { machinePassport } from '@/entities/machine';
 import { api, type CurrentSignalValue } from '@/shared/api';
 import { STATE_META } from '@/shared/config';
-import { enumLabel, FRESHNESS, TELEMETRY_QUALITY, useTranslation } from '@/shared/i18n';
+import { enumLabel, FRESHNESS, TELEMETRY_QUALITY, unitLabel, useTranslation } from '@/shared/i18n';
 import { formatDateTimeSec, formatTime, HOUR } from '@/shared/lib';
 import { useNow } from '@/shared/model';
 import { Chart, Panel, type PanelContext } from '@/shared/ui';
@@ -16,7 +16,7 @@ const SPARK_HOURS = 6;
 
 const numeric = (v: unknown) => (typeof v === 'number' ? v : null);
 const fmt = (v: unknown, unit?: string | null) =>
-  v == null ? '—' : `${typeof v === 'number' ? v.toLocaleString('ru-RU') : String(v)}${unit ? ` ${unit}` : ''}`;
+  v == null ? '—' : `${typeof v === 'number' ? v.toLocaleString('ru-RU') : String(v)}${unit ? ` ${unitLabel(unit)}` : ''}`;
 
 function gaugeOption(s: CurrentSignalValue, max: number, good: number, warn: number) {
   return {
@@ -76,7 +76,7 @@ function Sparkline({ machineId, signal, now, color }: { machineId: string; signa
     <div>
       <Text size="xs" c="dimmed">
         {signal.name}
-        {signal.unitCode ? `, ${signal.unitCode}` : ''}
+        {signal.unitCode ? `, ${unitLabel(signal.unitCode)}` : ''}
       </Text>
       <Chart option={option} height={70} group={`telemetry-${machineId}`} ariaLabel={`${signal.name} за ${SPARK_HOURS} ч`} />
     </div>
@@ -97,7 +97,7 @@ export function CurrentStats({ ctx }: { ctx: PanelContext }) {
   const sparks = signals.filter((s) => s.signalKind === 'GAUGE').filter((s) => s.semanticCode !== 'LOAD').slice(0, 2);
   const nominal = data?.machine.nominalRate ?? null;
   const gaugeMax = (s: CurrentSignalValue) =>
-    s.semanticCode === 'SPEED' && nominal ? Math.round(nominal * 1.2) : s.unitCode === '%' ? 120 : Math.max(100, Math.ceil(((numeric(s.lastUsableValue) ?? 0) * 1.5) / 10) * 10);
+    s.semanticCode === 'SPEED' && nominal ? Math.round(nominal * 1.2) : unitLabel(s.unitCode) === '%' ? 120 : Math.max(100, Math.ceil(((numeric(s.lastUsableValue) ?? 0) * 1.5) / 10) * 10);
 
   return (
     <Panel
@@ -118,7 +118,7 @@ export function CurrentStats({ ctx }: { ctx: PanelContext }) {
         refetch: () => void current.refetch(),
       }}
       exportName={`machine-${data?.machine.code ?? machineId}-telemetry`}
-      rows={() => signals.map((s) => ({ signal: s.name, code: s.code, value: numeric(s.lastUsableValue), unit: s.unitCode ?? '', freshness: enumLabel(FRESHNESS, s.freshness), quality: enumLabel(TELEMETRY_QUALITY, s.quality, '') }))}
+      rows={() => signals.map((s) => ({ signal: s.name, code: s.code, value: numeric(s.lastUsableValue), unit: unitLabel(s.unitCode), freshness: enumLabel(FRESHNESS, s.freshness), quality: enumLabel(TELEMETRY_QUALITY, s.quality, '') }))}
       minBodyHeight={240}
     >
       {data && (
