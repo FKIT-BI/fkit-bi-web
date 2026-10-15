@@ -70,9 +70,9 @@ export function RunDrawer({ runId, onClose }: { runId: string | null; onClose: (
             <Progress.Root size="lg"><Progress.Section value={p.progressPercent} animated={run.status === 'RUNNING'}><Progress.Label>{p.progressPercent.toFixed(0)}%</Progress.Label></Progress.Section></Progress.Root>
           )}
           {run.failure && (
-            <Alert color="red" title={run.failure.code}>
+            <Alert color="red" title="Запуск завершился ошибкой">
               <Text size="sm">{run.failure.message}</Text>
-              <Text size="xs" c="dimmed">{dt(run.failure.failedAt)} · {run.failure.retryable ? 'можно повторить' : 'повтор невозможен'}</Text>
+              <Text size="xs" c="dimmed">{dt(run.failure.failedAt)} · {run.failure.retryable ? 'можно повторить' : 'повтор невозможен'} · код для поддержки: {run.failure.code}</Text>
             </Alert>
           )}
           <Table withRowBorders={false} verticalSpacing={4}>

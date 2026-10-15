@@ -19,6 +19,8 @@ import {
   type ScenarioPhaseInput,
   type TelemetrySignal,
 } from '@/shared/api';
+import { enumLabel, fieldLabel, SEVERITY, SIGNAL_KIND } from '@/shared/i18n';
+import { makeCode } from '@/shared/lib';
 import { BehaviorEditor, behaviorForSignalKind, defaultBehavior } from './BehaviorEditor';
 import { CYCLE_MODE } from './labels';
 
@@ -53,7 +55,7 @@ const STATE_LABEL: Record<ExpectedMachineState, string> = {
 export function toBody(d: Draft, enterpriseId: string): ScenarioCreate {
   return {
     enterpriseId,
-    code: d.code,
+    code: d.code || makeCode(d.name, 'SCN'),
     name: d.name,
     description: d.description.trim() || null,
     cycleMode: d.cycleMode,
@@ -67,11 +69,11 @@ function Issues({ issues }: { issues: GenValidationIssue[] }) {
   return (
     <Stack gap={4}>
       {issues.map((i, n) => (
-        <Alert key={n} color={i.severity === 'ERROR' ? 'red' : 'yellow'} p="xs" title={i.code}>
+        <Alert key={n} color={i.severity === 'ERROR' ? 'red' : 'yellow'} p="xs" title={enumLabel(SEVERITY, i.severity)}>
           <Text size="sm">{i.message}</Text>
           {i.path && (
-            <Text size="xs" c="dimmed" ff="monospace">
-              {i.path}
+            <Text size="xs" c="dimmed">
+              {fieldLabel(i.path)}
             </Text>
           )}
         </Alert>
@@ -211,7 +213,7 @@ export function ScenarioEditor({ scenarioId, opened, onClose }: { scenarioId: st
         ) : (
           <>
             <Group grow align="flex-start">
-              <TextInput label="Код" description="A–Z, цифры, _" disabled={editing} value={draft.code} onChange={(e) => patch({ code: e.currentTarget.value.toUpperCase() })} />
+              <TextInput label={editing ? 'Код' : 'Код (необязательно)'} description={editing ? 'После создания не меняется' : 'Пусто — создастся из названия'} placeholder={editing ? undefined : makeCode(draft.name, 'SCN')} disabled={editing} ff="monospace" value={draft.code} onChange={(e) => patch({ code: e.currentTarget.value.toUpperCase() })} />
               <TextInput label="Название" required value={draft.name} onChange={(e) => patch({ name: e.currentTarget.value })} />
               <NativeSelect label="Повтор фаз" value={draft.cycleMode} data={Object.entries(CYCLE_MODE).map(([value, label]) => ({ value, label }))} onChange={(e) => patch({ cycleMode: e.currentTarget.value as CycleMode })} />
             </Group>
@@ -256,7 +258,7 @@ export function ScenarioEditor({ scenarioId, opened, onClose }: { scenarioId: st
                               <Card key={s.id} withBorder padding="xs">
                                 <Switch
                                   size="xs"
-                                  label={`${s.name} (${s.code}) · ${s.signalKind}${s.unitCode ? ` · ${s.unitCode}` : ''}`}
+                                  label={`${s.name} (${s.code}) · ${enumLabel(SIGNAL_KIND, s.signalKind)}${s.unitCode ? ` · ${s.unitCode}` : ''}`}
                                   checked={!!bb}
                                   onChange={(e) =>
                                     setTarget(t.machineId, (x) => ({

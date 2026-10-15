@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { machinePassport } from '@/entities/machine';
 import { api, type CurrentSignalValue } from '@/shared/api';
 import { STATE_META } from '@/shared/config';
-import { useTranslation } from '@/shared/i18n';
+import { enumLabel, FRESHNESS, TELEMETRY_QUALITY, useTranslation } from '@/shared/i18n';
 import { formatDateTimeSec, formatTime, HOUR } from '@/shared/lib';
 import { useNow } from '@/shared/model';
 import { Chart, Panel, type PanelContext } from '@/shared/ui';
@@ -118,7 +118,7 @@ export function CurrentStats({ ctx }: { ctx: PanelContext }) {
         refetch: () => void current.refetch(),
       }}
       exportName={`machine-${data?.machine.code ?? machineId}-telemetry`}
-      rows={() => signals.map((s) => ({ signal: s.name, code: s.code, value: numeric(s.lastUsableValue), unit: s.unitCode ?? '', freshness: s.freshness, quality: s.quality ?? '' }))}
+      rows={() => signals.map((s) => ({ signal: s.name, code: s.code, value: numeric(s.lastUsableValue), unit: s.unitCode ?? '', freshness: enumLabel(FRESHNESS, s.freshness), quality: enumLabel(TELEMETRY_QUALITY, s.quality, '') }))}
       minBodyHeight={240}
     >
       {data && (

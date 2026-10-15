@@ -15,3 +15,10 @@ export function rateUnitError(rate: number | string | null | undefined, unit: st
   if (!hasRate && unit) return { nominalRate: 'Укажите норму выпуска для выбранной единицы' };
   return {};
 }
+
+/** Unit code → symbol for display («CELSIUS» → «°C»); unknown codes are shown as is. */
+export function unitSymbol(units: MeasurementUnit[], code: string | null | undefined) {
+  if (!code) return '';
+  const u = units.find((x) => x.code === code);
+  return u ? u.symbol || u.name : code;
+}

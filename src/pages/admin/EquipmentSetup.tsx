@@ -19,13 +19,15 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { rateUnitError, unitOptions } from './units';
+import { COMPONENT_KIND, COMPONENT_KINDS, enumLabel, enumOptions, fieldLabel, HINT, KINDS_FOR_VALUE_TYPE, MACHINE_STATE, MACHINE_STATUS, SEMANTIC, SIGNAL_KIND, SIGNAL_SEMANTICS, TIMEZONE, USER_STATES, VALUE_TYPE } from '@/shared/i18n';
+import { makeCode } from '@/shared/lib';
+import { DurationInput } from '@/shared/ui';
 import { ApiError, formatApiError, setup, type ComponentKind, type MachineStateConfigurationInput, type SignalKind, type SignalValueType, type ValidationIssue } from '@/shared/api';
 
 export const DRAFT_KEY = 'fkit-bi-setup-draft';
 
-export const COMPONENT_KINDS: ComponentKind[] = ['LOGICAL_GROUP', 'ASSEMBLY', 'MODULE', 'MECHANISM', 'MOTOR', 'DRIVE', 'GEARBOX', 'SPINDLE', 'BEARING', 'COUPLING', 'ACTUATOR', 'PUMP', 'COMPRESSOR', 'FAN', 'BLOWER', 'VALVE', 'HEATER', 'COOLER', 'MIXER', 'DOSER', 'CONVEYOR', 'FEEDER', 'ROBOT', 'MANIPULATOR', 'TOOL', 'FIXTURE', 'SENSOR', 'INSTRUMENT', 'CONTROLLER', 'SAFETY_DEVICE', 'POWER_SUPPLY', 'LUBRICATION_SYSTEM', 'HYDRAULIC_SYSTEM', 'PNEUMATIC_SYSTEM', 'COOLING_SYSTEM', 'OTHER'];
-export const SIGNAL_SEMANTICS = ['TEMPERATURE', 'PRESSURE', 'FLOW_RATE', 'LEVEL', 'HUMIDITY', 'ROTATIONAL_SPEED', 'LINEAR_SPEED', 'VIBRATION', 'VOLTAGE', 'CURRENT', 'POWER', 'ENERGY', 'TORQUE', 'FORCE', 'POSITION', 'DISTANCE', 'PRODUCTION_COUNT', 'SCRAP_COUNT', 'CYCLE_COUNT', 'OPERATING_FLAG', 'READY_FLAG', 'ALARM_FLAG', 'MACHINE_MODE', 'QUALITY_CODE', 'LOAD_PERCENT', 'CUSTOM'];
-const TIMEZONES = ['Europe/Moscow', 'Europe/Kaliningrad', 'Asia/Yekaterinburg', 'Asia/Novosibirsk', 'Asia/Vladivostok'];
+export { COMPONENT_KINDS, SIGNAL_SEMANTICS };
+const TIMEZONES = Object.keys(TIMEZONE);
 const NUMERIC = ['DOUBLE', 'LONG'];
 
 interface Draft {
@@ -102,6 +104,9 @@ export function errorMessage(error: unknown) {
 
 const upper = (v: string) => v.toUpperCase();
 const CODE_PATTERN = '[A-Z][A-Z0-9_]{0,63}';
+/** Код необязателен: пустой строится из названия. */
+const codeOf = (code: string, name: string, prefix: string, taken: { code: string }[] = []) => code || makeCode(name, prefix, taken.map((x) => x.code));
+const opt = (labels: Record<string, { label: string }>, codes: readonly string[]) => codes.map((c) => ({ value: c, label: labels[c]?.label ?? c }));
 
 function Section({ id, step, title, hint, children }: { id: string; step: string; title: string; hint: string; children: ReactNode }) {
   return (
@@ -202,7 +207,7 @@ export function EquipmentSetup() {
       patch({ stateRules: JSON.stringify([...current, { name: 'Работа', priority: 10, targetState: 'RUN', enterCondition: compare, activationDelayMs: 0, releaseDelayMs: 0 }], null, 2) });
       setNotice(null);
     } catch {
-      setNotice({ kind: 'error', text: 'Rules должны быть JSON массивом.' });
+      setNotice({ kind: 'error', text: 'Правила должны быть JSON-массивом.' });
     }
   };
 
@@ -250,7 +255,7 @@ export function EquipmentSetup() {
       <Group justify="space-between" align="flex-end">
         <div>
           <Text size="xs" c="dimmed" fw={700} tt="uppercase">
-            Конфигурация · Epic 2
+            Конфигурация
           </Text>
           <Title order={1} fz="h2">
             Подготовьте оборудование
@@ -260,7 +265,7 @@ export function EquipmentSetup() {
           </Text>
         </div>
         <Badge size="lg" variant="outline">
-          {selectedMachine?.status ?? 'НЕТ МАШИНЫ'}
+          {selectedMachine ? MACHINE_STATUS[selectedMachine.status].label : 'Машина не выбрана'}
         </Badge>
       </Group>
 
@@ -275,7 +280,7 @@ export function EquipmentSetup() {
           <List size="sm">
             {Object.entries(fieldErrors).map(([path, message]) => (
               <List.Item key={path}>
-                <Code>{path}</Code> — {message}
+                {fieldLabel(path)} — {message}
               </List.Item>
             ))}
           </List>
@@ -293,7 +298,7 @@ export function EquipmentSetup() {
           <form
             onSubmit={submit(() =>
               act(
-                () => setup.createEnterprise({ code: draft.enterpriseCode, name: draft.enterpriseName, timezone: draft.timezone }),
+                () => setup.createEnterprise({ code: codeOf(draft.enterpriseCode, draft.enterpriseName, 'ENT', enterprises.data), name: draft.enterpriseName, timezone: draft.timezone }),
                 'Предприятие создано.',
                 ['enterprises'],
                 (r) => patch({ enterpriseCode: '', enterpriseName: '', enterpriseId: (r as { id: string }).id, machineId: '' }),
@@ -301,9 +306,9 @@ export function EquipmentSetup() {
             )}
           >
             <SimpleGrid cols={{ base: 1, sm: 4 }} spacing="sm" verticalSpacing="sm">
-              <TextInput label="Код" required pattern={CODE_PATTERN} placeholder="PLANT_01" value={draft.enterpriseCode} error={fe('code')} onChange={(e) => patch({ enterpriseCode: upper(e.currentTarget.value) })} />
+              <TextInput label="Код (необязательно)" pattern={CODE_PATTERN} placeholder={makeCode(draft.enterpriseName, 'ENT')} description={HINT.code} value={draft.enterpriseCode} error={fe('code')} onChange={(e) => patch({ enterpriseCode: upper(e.currentTarget.value) })} />
               <TextInput label="Название" required maxLength={200} value={draft.enterpriseName} error={fe('name')} onChange={(e) => patch({ enterpriseName: e.currentTarget.value })} />
-              <NativeSelect label="Часовой пояс" data={TIMEZONES} value={draft.timezone} onChange={(e) => patch({ timezone: e.currentTarget.value })} />
+              <NativeSelect label="Часовой пояс" data={opt(TIMEZONE, TIMEZONES)} value={draft.timezone} onChange={(e) => patch({ timezone: e.currentTarget.value })} />
               <Button type="submit" disabled={busy} mt={{ sm: 24 }}>
                 Создать предприятие
               </Button>
@@ -312,7 +317,7 @@ export function EquipmentSetup() {
         </Stack>
       </Section>
 
-      <Section id="lines" step="02" title="Линии и машины" hint="Машины создаются отключёнными и назначаются линии один раз.">
+      <Section id="lines" step="02" title="Линии и машины" hint="Машины создаются неподключёнными и назначаются линии один раз.">
         {!draft.enterpriseId ? (
           <Text c="dimmed">Сначала выберите предприятие.</Text>
         ) : (
@@ -320,7 +325,7 @@ export function EquipmentSetup() {
             <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
               <form
                 onSubmit={submit(() =>
-                  act(() => setup.createLine(draft.enterpriseId, { code: draft.lineCode, name: draft.lineName }), 'Линия создана.', ['lines'], () =>
+                  act(() => setup.createLine(draft.enterpriseId, { code: codeOf(draft.lineCode, draft.lineName, 'LINE', lines.data), name: draft.lineName }), 'Линия создана.', ['lines'], () =>
                     patch({ lineCode: '', lineName: '' }),
                   ),
                 )}
@@ -329,7 +334,7 @@ export function EquipmentSetup() {
                   <Title order={3} fz="md">
                     Новая линия
                   </Title>
-                  <TextInput label="Код" required pattern={CODE_PATTERN} value={draft.lineCode} onChange={(e) => patch({ lineCode: upper(e.currentTarget.value) })} />
+                  <TextInput label="Код (необязательно)" pattern={CODE_PATTERN} placeholder={makeCode(draft.lineName, 'LINE')} value={draft.lineCode} onChange={(e) => patch({ lineCode: upper(e.currentTarget.value) })} />
                   <TextInput label="Название" required maxLength={200} value={draft.lineName} onChange={(e) => patch({ lineName: e.currentTarget.value })} />
                   <Button type="submit" disabled={busy}>
                     Добавить линию
@@ -341,14 +346,14 @@ export function EquipmentSetup() {
                   act(
                     () =>
                       setup.createMachine(draft.enterpriseId, {
-                        code: draft.machineCode,
+                        code: codeOf(draft.machineCode, draft.machineName, 'M', machines.data),
                         name: draft.machineName,
                         lineId: draft.machineLineId || null,
                         nominalRate: draft.nominalRate ? Number(draft.nominalRate) : null,
                         productionUnit: draft.productionUnit || null,
                         parameters: [],
                       }),
-                    'Машина создана в статусе DISABLED.',
+                    'Машина создана. Она не подключена к мониторингу до активации.',
                     ['machines'],
                     (r) => patch({ machineCode: '', machineName: '', machineId: (r as { id: string }).id }),
                   ),
@@ -364,14 +369,14 @@ export function EquipmentSetup() {
                     onChange={(e) => patch({ machineLineId: e.currentTarget.value })}
                     data={[{ value: '', label: 'Без линии' }, ...(lines.data ?? []).map((l) => ({ value: l.id, label: l.name }))]}
                   />
-                  <TextInput label="Код" required pattern={CODE_PATTERN} value={draft.machineCode} onChange={(e) => patch({ machineCode: upper(e.currentTarget.value) })} />
+                  <TextInput label="Код (необязательно)" pattern={CODE_PATTERN} placeholder={makeCode(draft.machineName, 'M')} value={draft.machineCode} onChange={(e) => patch({ machineCode: upper(e.currentTarget.value) })} />
                   <TextInput label="Название" required maxLength={200} value={draft.machineName} onChange={(e) => patch({ machineName: e.currentTarget.value })} />
                   <SimpleGrid cols={2} spacing="xs">
                     <NumberInput label="Норма выпуска" min={0} decimalScale={6} value={draft.nominalRate} error={machinePairError.nominalRate ?? fe('nominalRate')} onChange={(v) => patch({ nominalRate: String(v ?? '') })} />
                     <NativeSelect label="Единица выпуска" value={draft.productionUnit} error={machinePairError.productionUnit ?? fe('productionUnit')} data={unitOptions(units.data ?? [], draft.productionUnit, 'Не выбрана')} onChange={(e) => patch({ productionUnit: e.currentTarget.value })} />
                   </SimpleGrid>
                   <Button type="submit" disabled={busy || !!machinePairError.nominalRate || !!machinePairError.productionUnit}>
-                    Создать DISABLED
+                    Создать машину
                   </Button>
                 </Stack>
               </form>
@@ -404,7 +409,7 @@ export function EquipmentSetup() {
               label="Настраиваемая машина"
               value={draft.machineId}
               onChange={(e) => patch({ machineId: e.currentTarget.value })}
-              data={[{ value: '', label: 'Выберите машину' }, ...(machines.data ?? []).map((m) => ({ value: m.id, label: `${m.name} · ${m.code} (${m.status})` }))]}
+              data={[{ value: '', label: 'Выберите машину' }, ...(machines.data ?? []).map((m) => ({ value: m.id, label: `${m.name} · ${m.code} (${MACHINE_STATUS[m.status].label})` }))]}
             />
           </Stack>
         )}
@@ -412,7 +417,7 @@ export function EquipmentSetup() {
 
       {selectedMachine && (
         <>
-          <Section id="machine" step="03" title="Компоненты и сигналы" hint="Каждый объект сохраняется отдельным запросом; ссылки ограничены этой машиной.">
+          <Section id="machine" step="03" title="Узлы и сигналы" hint="Узел — необязательная часть машины (двигатель, насос). Сигнал — значение, которое передаёт машина.">
             <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
               <form
                 onSubmit={submit(() =>
@@ -420,7 +425,7 @@ export function EquipmentSetup() {
                     () =>
                       setup.createComponent(draft.machineId, {
                         parentComponentId: draft.componentParentId || null,
-                        code: draft.componentCode,
+                        code: codeOf(draft.componentCode, draft.componentName, 'CMP', components.data),
                         name: draft.componentName,
                         kind: draft.componentKind as ComponentKind,
                         sortOrder: (components.data?.length ?? 0) * 10,
@@ -434,19 +439,19 @@ export function EquipmentSetup() {
               >
                 <Stack gap="xs">
                   <Title order={3} fz="md">
-                    Компонент
+                    Узел машины
                   </Title>
                   <NativeSelect
-                    label="Родитель"
+                    label="Входит в узел"
                     value={draft.componentParentId}
                     onChange={(e) => patch({ componentParentId: e.currentTarget.value })}
-                    data={[{ value: '', label: 'Корневой компонент' }, ...(components.data ?? []).map((c) => ({ value: c.id, label: `${c.name} · ${c.code}` }))]}
+                    data={[{ value: '', label: 'Верхний уровень машины' }, ...(components.data ?? []).map((c) => ({ value: c.id, label: `${c.name} · ${c.code}` }))]}
                   />
-                  <TextInput label="Код" required pattern={CODE_PATTERN} value={draft.componentCode} onChange={(e) => patch({ componentCode: upper(e.currentTarget.value) })} />
+                  <TextInput label="Код (необязательно)" pattern={CODE_PATTERN} placeholder={makeCode(draft.componentName, 'CMP')} value={draft.componentCode} onChange={(e) => patch({ componentCode: upper(e.currentTarget.value) })} />
                   <TextInput label="Название" required maxLength={200} value={draft.componentName} onChange={(e) => patch({ componentName: e.currentTarget.value })} />
-                  <NativeSelect label="Вид" data={COMPONENT_KINDS} value={draft.componentKind} onChange={(e) => patch({ componentKind: e.currentTarget.value })} />
+                  <NativeSelect label="Вид узла" data={opt(COMPONENT_KIND, COMPONENT_KINDS)} value={draft.componentKind} onChange={(e) => patch({ componentKind: e.currentTarget.value })} />
                   <Button type="submit" disabled={busy}>
-                    Добавить компонент
+                    Добавить узел
                   </Button>
                 </Stack>
               </form>
@@ -456,12 +461,12 @@ export function EquipmentSetup() {
                     () =>
                       setup.createSignal(draft.machineId, {
                         componentId: draft.signalComponentId || null,
-                        code: draft.signalCode,
+                        code: codeOf(draft.signalCode, draft.signalName, 'SIG', signals.data),
                         name: draft.signalName,
                         valueType: draft.valueType as SignalValueType,
                         signalKind: draft.signalKind as SignalKind,
                         semanticCode: draft.semanticCode,
-                        customSemanticCode: draft.semanticCode === 'CUSTOM' ? 'CUSTOM_VALUE' : null,
+                        customSemanticCode: draft.semanticCode === 'CUSTOM' ? makeCode(draft.signalName, 'CUSTOM') : null,
                         unitCode: NUMERIC.includes(draft.valueType) ? draft.unitCode || null : null,
                         staleAfterMs: 60000,
                         featured: true,
@@ -477,32 +482,33 @@ export function EquipmentSetup() {
                     Сигнал
                   </Title>
                   <NativeSelect
-                    label="Компонент"
+                    label="Где установлен"
                     value={draft.signalComponentId}
                     onChange={(e) => patch({ signalComponentId: e.currentTarget.value })}
-                    data={[{ value: '', label: 'Уровень машины' }, ...(components.data ?? []).map((c) => ({ value: c.id, label: `${c.name} · ${c.code}` }))]}
+                    data={[{ value: '', label: 'Вся машина' }, ...(components.data ?? []).map((c) => ({ value: c.id, label: `${c.name} · ${c.code}` }))]}
                   />
-                  <TextInput label="Код" required pattern={CODE_PATTERN} value={draft.signalCode} onChange={(e) => patch({ signalCode: upper(e.currentTarget.value) })} />
+                  <TextInput label="Код (необязательно)" pattern={CODE_PATTERN} placeholder={makeCode(draft.signalName, 'SIG')} value={draft.signalCode} onChange={(e) => patch({ signalCode: upper(e.currentTarget.value) })} />
                   <TextInput label="Название" required maxLength={200} value={draft.signalName} onChange={(e) => patch({ signalName: e.currentTarget.value })} />
                   <SimpleGrid cols={2} spacing="xs">
                     <NativeSelect
-                      label="Тип"
-                      data={['DOUBLE', 'LONG', 'BOOLEAN', 'STRING']}
+                      label="Формат значения"
+                      data={enumOptions(VALUE_TYPE)}
                       value={draft.valueType}
                       onChange={(e) => {
                         const v = e.currentTarget.value;
-                        patch(NUMERIC.includes(v) ? { valueType: v } : { valueType: v, signalKind: 'STATE', unitCode: '' });
+                        const kinds = KINDS_FOR_VALUE_TYPE[v as keyof typeof KINDS_FOR_VALUE_TYPE];
+                        patch({ valueType: v, signalKind: kinds.includes(draft.signalKind as never) ? draft.signalKind : kinds[0], ...(NUMERIC.includes(v) ? {} : { unitCode: '' }) });
                       }}
                     />
                     <NativeSelect
-                      label="Последовательность"
-                      data={NUMERIC.includes(draft.valueType) ? ['GAUGE', 'COUNTER', 'STATE'] : ['STATE']}
+                      label="Характер сигнала"
+                      data={enumOptions(SIGNAL_KIND, KINDS_FOR_VALUE_TYPE[draft.valueType as keyof typeof KINDS_FOR_VALUE_TYPE])}
                       value={draft.signalKind}
                       onChange={(e) => patch({ signalKind: e.currentTarget.value })}
                     />
-                    <NativeSelect label="Семантика" data={SIGNAL_SEMANTICS} value={draft.semanticCode} onChange={(e) => patch({ semanticCode: e.currentTarget.value })} />
+                    <NativeSelect label="Что измеряет" data={opt(SEMANTIC, SIGNAL_SEMANTICS)} value={draft.semanticCode} onChange={(e) => patch({ semanticCode: e.currentTarget.value })} />
                     <NativeSelect
-                      label="Единица"
+                      label="Единица измерения"
                       disabled={!NUMERIC.includes(draft.valueType)}
                       value={draft.unitCode}
                       data={unitOptions(units.data ?? [], draft.unitCode, 'Без единицы')}
@@ -518,7 +524,7 @@ export function EquipmentSetup() {
             <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg" mt="md">
               <div>
                 <Title order={3} fz="md" mb={4}>
-                  Компоненты
+                  Узлы
                 </Title>
                 {components.data?.length ? (
                   components.data.map((c) => (
@@ -529,7 +535,7 @@ export function EquipmentSetup() {
                   ))
                 ) : (
                   <Text size="sm" c="dimmed">
-                    Компонентов пока нет.
+                    Узлов пока нет.
                   </Text>
                 )}
               </div>
@@ -543,7 +549,7 @@ export function EquipmentSetup() {
                       <div>
                         <Text size="sm">{s.name}</Text>
                         <Text size="xs" c="dimmed">
-                          {s.semanticCode} · {s.valueType}
+                          {enumLabel(SEMANTIC, s.semanticCode)} · {enumLabel(VALUE_TYPE, s.valueType)}
                         </Text>
                       </div>
                       <Code>{s.code}</Code>
@@ -558,14 +564,14 @@ export function EquipmentSetup() {
             </SimpleGrid>
           </Section>
 
-          <Section id="state" step="04" title="Правила состояния" hint="Введите декларативные AST-правила. Проверка не сохраняет документ.">
+          <Section id="state" step="04" title="Правила состояния" hint="Правила определяют, когда машина в работе, в простое или в аварии. Проверка ничего не сохраняет.">
             <Stack gap="sm">
               <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-                <NativeSelect label="Состояние по умолчанию" data={['IDLE', 'RUN', 'DOWN', 'SETUP', 'PLANNED_STOP']} value={draft.defaultState} onChange={(e) => patch({ defaultState: e.currentTarget.value })} />
-                <NumberInput label="Offline после, мс" min={1} value={draft.offlineAfterMs} onChange={(v) => patch({ offlineAfterMs: String(v ?? '') })} />
+                <NativeSelect label="Состояние по умолчанию" description={HINT.defaultState} data={opt(MACHINE_STATE, USER_STATES)} value={draft.defaultState} onChange={(e) => patch({ defaultState: e.currentTarget.value })} />
+                <DurationInput label="«Нет данных» через" hint={HINT.offlineAfter} min={1} value={draft.offlineAfterMs === '' ? '' : Number(draft.offlineAfterMs)} onChange={(v) => patch({ offlineAfterMs: String(v) })} />
               </SimpleGrid>
               <Textarea
-                label="Rules — JSON массив"
+                label="Правила (JSON)"
                 autosize
                 minRows={8}
                 maxRows={24}
@@ -589,7 +595,7 @@ export function EquipmentSetup() {
                 <Alert color="yellow" title="Результат проверки">
                   {validation.map((x, i) => (
                     <Text key={`${x.code}-${i}`} size="sm">
-                      <Code>{x.code}</Code> {x.path && <Text span size="xs" c="dimmed">{x.path}: </Text>}
+                      {x.path && <Text span size="xs" c="dimmed">{fieldLabel(x.path)}: </Text>}
                       {x.message}
                     </Text>
                   ))}
@@ -616,7 +622,7 @@ export function EquipmentSetup() {
                 <Stack gap={2}>
                   {[...readiness.data.errors.map((x) => ({ ...x, level: 'Ошибка' })), ...readiness.data.warnings.map((x) => ({ ...x, level: 'Предупреждение' }))].map((x, i) => (
                     <Text key={`${x.code}-${i}`} size="sm">
-                      <b>{x.level}:</b> <Code>{x.code}</Code> {x.message}
+                      <b>{x.level}:</b> {x.message}
                     </Text>
                   ))}
                 </Stack>

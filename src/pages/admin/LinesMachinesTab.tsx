@@ -1,16 +1,17 @@
-import { ActionIcon, Badge, Button, Group, NativeSelect, NumberInput, SimpleGrid, Stack, Table, Text, TextInput, Tooltip } from '@mantine/core';
+import { ActionIcon, Autocomplete, Badge, Button, Group, NativeSelect, NumberInput, SimpleGrid, Stack, Table, Text, TextInput, Tooltip } from '@mantine/core';
 import { IconListDetails, IconPencil, IconPlus } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useAdminNav } from '@/shared/model';
 import { setup, type Machine, type MeasurementUnit, type ProductionLine, type TypedParameter } from '@/shared/api';
-import { Panel } from '@/shared/ui';
+import { HINT } from '@/shared/i18n';
+import { CodeField, HintLabel, Panel, useAutoCode } from '@/shared/ui';
 import { confirmDisable, FormModal, setupKey, StatusBadge, StatusToggle, useStatusMutation } from './common';
-import { rateUnitError, unitOptions } from './units';
+import { rateUnitError, unitOptions, unitSymbol } from './units';
 import { MachineDrawer } from './MachineDrawer';
 import { ParametersEditor } from './ParametersEditor';
 
-const CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
+const MACHINE_TYPES = ['Экструдер', 'Пресс', 'Термопластавтомат', 'Упаковочная машина', 'Станок ЧПУ', 'Конвейер', 'Миксер', 'Печатная машина', 'Ламинатор', 'Резательная машина'];
 
 export function LinesMachinesTab({ enterpriseId, readOnly }: { enterpriseId: string; readOnly: boolean }) {
   const lines = useQuery({ queryKey: setupKey('lines-all', enterpriseId), queryFn: () => setup.allLines(enterpriseId), enabled: !!enterpriseId });
@@ -77,8 +78,8 @@ export function LinesMachinesTab({ enterpriseId, readOnly }: { enterpriseId: str
                     <Table.Td>{m.name}</Table.Td>
                     <Table.Td>{lineName(m.lineId)}</Table.Td>
                     <Table.Td>{m.machineType ?? '—'}</Table.Td>
-                    <Table.Td>{m.nominalRate ? `${m.nominalRate} ${m.productionUnit ?? ''}/ч` : '—'}</Table.Td>
-                    <Table.Td><StatusBadge status={m.status} /></Table.Td>
+                    <Table.Td>{m.nominalRate ? `${m.nominalRate} ${unitSymbol(units.data ?? [], m.productionUnit)}/ч` : '—'}</Table.Td>
+                    <Table.Td><StatusBadge machine status={m.status} /></Table.Td>
                     <Table.Td>
                       <Group gap={2} justify="flex-end" wrap="nowrap">
                         <Tooltip label="Компоненты, сигналы, правила состояний"><ActionIcon variant="subtle" aria-label="Детали машины" onClick={() => { setDrawerTab('passport'); setDrawerId(m.id); }}><IconListDetails size={16} /></ActionIcon></Tooltip>
@@ -94,24 +95,24 @@ export function LinesMachinesTab({ enterpriseId, readOnly }: { enterpriseId: str
         </Panel>
       </Stack>
 
-      {lineEdit && <LineForm key={lineEdit === 'new' ? 'new' : lineEdit.id} enterpriseId={enterpriseId} item={lineEdit === 'new' ? null : lineEdit} nextOrder={lineList.length} onClose={() => setLineEdit(null)} />}
-      {machineEdit && <MachineForm key={machineEdit === 'new' ? 'new' : machineEdit.id} enterpriseId={enterpriseId} lines={lineList.filter((l) => l.status === 'ACTIVE')} units={units.data ?? []} item={machineEdit === 'new' ? null : machineEdit} nextOrder={machineList.length} onClose={() => setMachineEdit(null)} />}
+      {lineEdit && <LineForm key={lineEdit === 'new' ? 'new' : lineEdit.id} enterpriseId={enterpriseId} item={lineEdit === 'new' ? null : lineEdit} taken={lineList.map((l) => l.code)} nextOrder={lineList.length} onClose={() => setLineEdit(null)} />}
+      {machineEdit && <MachineForm key={machineEdit === 'new' ? 'new' : machineEdit.id} enterpriseId={enterpriseId} lines={lineList.filter((l) => l.status === 'ACTIVE')} units={units.data ?? []} item={machineEdit === 'new' ? null : machineEdit} taken={machineList.map((m) => m.code)} nextOrder={machineList.length} onClose={() => setMachineEdit(null)} />}
       <MachineDrawer machineId={drawerId} initialTab={drawerTab} readOnly={readOnly} onClose={() => { setDrawerId(null); setDrawerTab('passport'); }} />
     </Stack>
   );
 }
 
-function LineForm({ enterpriseId, item, nextOrder, onClose }: { enterpriseId: string; item: ProductionLine | null; nextOrder: number; onClose: () => void }) {
-  const [code, setCode] = useState(item?.code ?? '');
+function LineForm({ enterpriseId, item, taken, nextOrder, onClose }: { enterpriseId: string; item: ProductionLine | null; taken: string[]; nextOrder: number; onClose: () => void }) {
   const [name, setName] = useState(item?.name ?? '');
+  const code = useAutoCode(name, 'LINE', taken, item?.code);
   const [order, setOrder] = useState<number | ''>(item?.sortOrder ?? nextOrder);
   return (
-    <FormModal opened onClose={onClose} title={item ? 'Линия' : 'Новая линия'} success={item ? 'Линия сохранена' : 'Линия создана'} canSubmit={!!name.trim() && (!!item || CODE.test(code))}
-      submit={() => (item ? setup.updateLine(item.id, { name: name.trim(), sortOrder: Number(order || 0) }) : setup.createLine(enterpriseId, { code, name: name.trim(), sortOrder: Number(order || 0) }))}>
+    <FormModal opened onClose={onClose} title={item ? 'Линия' : 'Новая линия'} success={item ? 'Линия сохранена' : 'Линия создана'} canSubmit={!!name.trim() && code.valid}
+      submit={() => (item ? setup.updateLine(item.id, { name: name.trim(), sortOrder: Number(order || 0) }) : setup.createLine(enterpriseId, { code: code.value, name: name.trim(), sortOrder: Number(order || 0) }))}>
       {(fe) => (
         <>
-          <TextInput label="Код" description="A–Z, цифры, _" disabled={!!item} required value={code} error={fe('code')} onChange={(e) => setCode(e.currentTarget.value.toUpperCase())} />
-          <TextInput label="Название" required value={name} error={fe('name')} onChange={(e) => setName(e.currentTarget.value)} />
+          <TextInput label="Название" description="Группа машин, работающих вместе: например, «Линия экструзии 1»" required data-autofocus value={name} error={fe('name')} onChange={(e) => setName(e.currentTarget.value)} />
+          <CodeField code={code} locked={!!item} error={fe('code')} />
           <NumberInput label="Порядок" min={0} value={order} error={fe('sortOrder')} onChange={(v) => setOrder(v === '' ? '' : Number(v))} />
         </>
       )}
@@ -119,9 +120,8 @@ function LineForm({ enterpriseId, item, nextOrder, onClose }: { enterpriseId: st
   );
 }
 
-function MachineForm({ enterpriseId, lines, units, item, nextOrder, onClose }: { enterpriseId: string; lines: ProductionLine[]; units: MeasurementUnit[]; item: Machine | null; nextOrder: number; onClose: () => void }) {
+function MachineForm({ enterpriseId, lines, units, item, taken, nextOrder, onClose }: { enterpriseId: string; lines: ProductionLine[]; units: MeasurementUnit[]; item: Machine | null; taken: string[]; nextOrder: number; onClose: () => void }) {
   const [v, setV] = useState({
-    code: item?.code ?? '',
     name: item?.name ?? '',
     lineId: item?.lineId ?? '',
     machineType: item?.machineType ?? '',
@@ -137,8 +137,9 @@ function MachineForm({ enterpriseId, lines, units, item, nextOrder, onClose }: {
   const patch = (p: Partial<typeof v>) => setV((x) => ({ ...x, ...p }));
   const text = (s: string) => s.trim() || null;
   const pairError = rateUnitError(v.nominalRate, v.productionUnit);
+  const code = useAutoCode(v.name, 'M', taken, item?.code);
   return (
-    <FormModal opened onClose={onClose} size="lg" title={item ? 'Машина' : 'Новая машина'} success={item ? 'Машина сохранена' : 'Машина создана (отключена до активации)'} canSubmit={!!v.name.trim() && (!!item || CODE.test(v.code)) && !pairError.nominalRate && !pairError.productionUnit}
+    <FormModal opened onClose={onClose} size="lg" title={item ? 'Машина' : 'Новая машина'} success={item ? 'Машина сохранена' : 'Машина создана (отключена до активации)'} canSubmit={!!v.name.trim() && code.valid && !pairError.nominalRate && !pairError.productionUnit}
       submit={() => {
         const common = {
           name: v.name.trim(),
@@ -152,23 +153,23 @@ function MachineForm({ enterpriseId, lines, units, item, nextOrder, onClose }: {
           sortOrder: v.sortOrder === '' ? null : Number(v.sortOrder),
           parameters: params,
         };
-        return item ? setup.updateMachine(item.id, common) : setup.createMachine(enterpriseId, { code: v.code, lineId: v.lineId || null, ...common });
+        return item ? setup.updateMachine(item.id, common) : setup.createMachine(enterpriseId, { code: code.value, lineId: v.lineId || null, ...common });
       }}>
       {(fe) => (
         <>
           <SimpleGrid cols={{ base: 1, xs: 2 }}>
-            <TextInput label="Код" description="A–Z, цифры, _" disabled={!!item} required value={v.code} error={fe('code')} onChange={(e) => patch({ code: e.currentTarget.value.toUpperCase() })} />
-            <TextInput label="Название" required value={v.name} error={fe('name')} onChange={(e) => patch({ name: e.currentTarget.value })} />
+            <TextInput label="Название" placeholder="Экструдер Э-1" required data-autofocus value={v.name} error={fe('name')} onChange={(e) => patch({ name: e.currentTarget.value })} />
             <NativeSelect label="Линия" disabled={!!item} description={item ? 'Назначение линии — отдельной операцией' : undefined} value={v.lineId} error={fe('lineId')} data={[{ value: '', label: 'Не назначена' }, ...lines.map((l) => ({ value: l.id, label: l.name }))]} onChange={(e) => patch({ lineId: e.currentTarget.value })} />
-            <TextInput label="Тип машины" value={v.machineType} error={fe('machineType')} onChange={(e) => patch({ machineType: e.currentTarget.value })} />
+            <Autocomplete label={<HintLabel hint={HINT.machineType}>Тип машины</HintLabel>} data={MACHINE_TYPES} value={v.machineType} error={fe('machineType')} onChange={(x) => patch({ machineType: x })} />
             <TextInput label="Инвентарный номер" value={v.inventoryNo} onChange={(e) => patch({ inventoryNo: e.currentTarget.value })} />
             <TextInput label="Производитель" value={v.manufacturer} onChange={(e) => patch({ manufacturer: e.currentTarget.value })} />
             <TextInput label="Модель" value={v.model} onChange={(e) => patch({ model: e.currentTarget.value })} />
             <NumberInput label="Год ввода" min={1900} max={9999} allowDecimal={false} value={v.year} error={fe('commissioningYear')} onChange={(x) => patch({ year: x === '' ? '' : Number(x) })} />
-            <NumberInput label="Норма выпуска в час" min={0} value={v.nominalRate} error={pairError.nominalRate ?? fe('nominalRate')} onChange={(x) => patch({ nominalRate: x === '' ? '' : Number(x) })} />
+            <NumberInput label={<HintLabel hint={HINT.nominalRate}>Норма выпуска в час</HintLabel>} min={0} value={v.nominalRate} error={pairError.nominalRate ?? fe('nominalRate')} onChange={(x) => patch({ nominalRate: x === '' ? '' : Number(x) })} />
             <NativeSelect label="Единица выпуска" value={v.productionUnit} error={pairError.productionUnit ?? fe('productionUnit')} data={unitOptions(units, v.productionUnit, 'Не выбрана')} onChange={(e) => patch({ productionUnit: e.currentTarget.value })} />
             <NumberInput label="Порядок" min={0} value={v.sortOrder} onChange={(x) => patch({ sortOrder: x === '' ? '' : Number(x) })} />
           </SimpleGrid>
+          <CodeField code={code} locked={!!item} error={fe('code')} />
           <ParametersEditor value={params} units={units} errorFor={fe} onChange={setParams} />
           {fe('parameters') && <Text size="xs" c="red">{fe('parameters')}</Text>}
         </>

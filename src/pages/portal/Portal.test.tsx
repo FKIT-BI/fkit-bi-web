@@ -32,9 +32,12 @@ describe('портал', () => {
     expect((submit as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.change(within(dialog).getByLabelText(/^Название/), { target: { value: 'Завод №2' } });
+    // код строится из названия и не требует ввода
+    expect(within(dialog).getByText('ZAVOD_2')).toBeTruthy();
+    await user.click(within(dialog).getByRole('button', { name: 'Изменить код' }));
     fireEvent.change(within(dialog).getByLabelText(/^Код/), { target: { value: 'flexo_01' } });
     await user.click(submit);
-    expect(await within(dialog).findByText(/DUPLICATE_CODE/)).toBeTruthy();
+    expect((await within(dialog).findAllByText('Предприятие с таким кодом уже есть')).length).toBeGreaterThan(0);
 
     fireEvent.change(within(dialog).getByLabelText(/^Код/), { target: { value: 'PLANT_B' } });
     await user.click(submit);

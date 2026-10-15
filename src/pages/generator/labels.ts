@@ -1,4 +1,5 @@
 import type { BehaviorModel, RunMode, RunStatus } from '@/shared/api';
+import { TELEMETRY_QUALITY } from '@/shared/i18n';
 
 export const RUN_STATUS: Record<RunStatus, { label: string; color: string }> = {
   SCHEDULED: { label: 'Запланирован', color: 'indigo' },
@@ -37,4 +38,8 @@ export const MODEL_LABEL: Record<BehaviorModel, string> = {
   SEQUENCE: 'Последовательность значений',
 };
 
-export const QUALITY_LABEL = { GOOD: 'Хорошее', UNCERTAIN: 'Сомнительное', BAD: 'Плохое' } as const;
+export const QUALITY_LABEL = {
+  GOOD: TELEMETRY_QUALITY.GOOD.label,
+  UNCERTAIN: TELEMETRY_QUALITY.UNCERTAIN.label,
+  BAD: TELEMETRY_QUALITY.BAD.label,
+} as const;

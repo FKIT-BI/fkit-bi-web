@@ -5,6 +5,7 @@ import { IconPower } from '@tabler/icons-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { ApiError, qk, type ConfigStatus } from '@/shared/api';
+import { CONFIG_STATUS, fieldLabel, MACHINE_STATUS } from '@/shared/i18n';
 import { errorMessage } from './EquipmentSetup';
 
 export { errorMessage };
@@ -16,11 +17,16 @@ export function useRefreshConfig() {
   return () => Promise.all([qc.invalidateQueries({ queryKey: ['setup'] }), qc.invalidateQueries({ queryKey: qk.config })]);
 }
 
-export const StatusBadge = ({ status }: { status: ConfigStatus }) => (
-  <Badge variant="light" color={status === 'ACTIVE' ? 'green' : 'gray'}>
-    {status === 'ACTIVE' ? 'Активно' : 'Отключено'}
-  </Badge>
-);
+export const StatusBadge = ({ status, machine }: { status: ConfigStatus; machine?: boolean }) => {
+  const term = (machine ? MACHINE_STATUS : CONFIG_STATUS)[status];
+  return (
+    <Tooltip label={term.hint} multiline w={260} disabled={!term.hint}>
+      <Badge variant="light" color={status === 'ACTIVE' ? 'green' : 'gray'}>
+        {term.label}
+      </Badge>
+    </Tooltip>
+  );
+};
 
 export function StatusToggle({ status, onToggle, disabled, loading }: { status: ConfigStatus; onToggle: (next: ConfigStatus) => void; disabled?: boolean; loading?: boolean }) {
   const next: ConfigStatus = status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
@@ -83,7 +89,15 @@ export function FormModal({
     onError: setError,
   });
   const fieldErrors = error instanceof ApiError ? error.fieldErrors : [];
-  const fe = (path: string) => fieldErrors.find((f) => f.path === path)?.message;
+  // Поля, которые форма показывает у своих контролов; остальные ошибки выводятся списком с русскими подписями.
+  const shown = new Set<string>();
+  const fe = (path: string) => {
+    shown.add(path);
+    return fieldErrors.find((f) => f.path === path)?.message;
+  };
+  const body = children(fe);
+  const isShown = (path: string) => [...shown].some((p) => path === p || path.startsWith(`${p}[`) || path.startsWith(`${p}.`));
+  const rest = fieldErrors.filter((f) => !f.path || !isShown(f.path));
   return (
     <Modal opened={opened} onClose={onClose} title={title} size={size} fullScreen={isMobile} closeOnClickOutside={false} onExitTransitionEnd={() => setError(null)}>
       <form
@@ -94,11 +108,11 @@ export function FormModal({
         }}
       >
         <Stack gap="sm">
-          {children(fe)}
+          {body}
           {error != null && (
             <Alert color="red" p="xs">
               <Text size="sm">{errorMessage(error)}</Text>
-              {fieldErrors.filter((f) => !f.path).map((f, i) => <Text key={i} size="xs">{f.message}</Text>)}
+              {rest.map((f, i) => <Text key={i} size="xs">{f.path ? `${fieldLabel(f.path)}: ` : ''}{f.message}</Text>)}
             </Alert>
           )}
           <Group justify="flex-end">
