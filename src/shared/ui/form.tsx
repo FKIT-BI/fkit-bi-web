@@ -4,6 +4,8 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { GLOSSARY, HINT, type EnumOption } from '@/shared/i18n';
 import { CODE_PATTERN, makeCode } from '@/shared/lib';
 
+export { formatMs } from '@/shared/lib';
+
 /** Подпись поля со значком ⓘ и всплывающим пояснением. */
 export function HintLabel({ children, hint }: { children: ReactNode; hint?: string }) {
   if (!hint) return <>{children}</>;
@@ -121,17 +123,6 @@ const UNITS = [
 type DurationUnit = (typeof UNITS)[number]['value'];
 
 const bestUnit = (ms: number): DurationUnit => (ms >= 3_600_000 && ms % 3_600_000 === 0 ? 'h' : ms >= 60_000 && ms % 60_000 === 0 ? 'm' : 's');
-
-/** «30 с», «1 мин», «1 ч 30 мин» для длительностей в миллисекундах. */
-export function formatMs(ms: number | null | undefined): string {
-  if (ms == null || !Number.isFinite(ms)) return '—';
-  if (ms < 1000) return `${ms} мс`;
-  const sec = Math.round(ms / 1000);
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = sec % 60;
-  return [h && `${h} ч`, m && `${m} мин`, s && `${s} с`].filter(Boolean).join(' ') || '0 с';
-}
 
 /** Поле длительности: число + «секунд / минут / часов»; значение наружу — в миллисекундах ('' — пусто). */
 export function DurationInput({

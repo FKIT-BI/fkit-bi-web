@@ -9,7 +9,10 @@ import { useAdminNav } from '@/shared/model';
 import AdminPage from './index';
 
 setupPageTests();
-beforeEach(() => useAdminNav.setState({ tab: 'setup', machineId: null }));
+beforeEach(() => {
+  sessionStorage.clear();
+  useAdminNav.setState({ tab: 'setup', machineId: null, resumeId: null });
+});
 afterEach(cleanup);
 
 describe('пошаговая настройка', () => {
@@ -23,9 +26,10 @@ describe('пошаговая настройка', () => {
     expect(await within(row).findByText('У машины нет активных сигналов')).toBeTruthy();
     expect(within(row).getByText('Не заданы правила состояния')).toBeTruthy();
 
-    await user.click(within(row).getByRole('button', { name: 'Сигналы' }));
-    expect(await screen.findByRole('button', { name: /Новый сигнал/ })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Сигналы' }).getAttribute('aria-selected')).toBe('true');
-    await waitFor(() => expect(useAdminNav.getState().machineId).toBeNull());
+    // продолжение настройки открывает мастер на первом незавершённом шаге — «Сигналы»
+    await user.click(within(row).getByRole('button', { name: 'Продолжить настройку' }));
+    expect(await screen.findByRole('heading', { name: '5. Сигналы' })).toBeTruthy();
+    expect(useAdminNav.getState().tab).toBe('wizard');
+    await waitFor(() => expect(useAdminNav.getState().resumeId).toBeNull());
   });
 });

@@ -1,3 +1,4 @@
+import { unitLabel } from '@/shared/i18n';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { api, type CurrentState, type Machine } from '@/shared/api';
@@ -34,7 +35,7 @@ export function machinePassport(m: Machine) {
   add('Производитель', m.manufacturer);
   add('Модель', m.model);
   add('Год ввода', m.commissioningYear);
-  if (m.nominalRate != null) add('Номинальная скорость', `${m.nominalRate.toLocaleString('ru-RU')} ${m.productionUnit ?? ''}/ч`.trim());
+  if (m.nominalRate != null) add('Номинальная скорость', `${m.nominalRate.toLocaleString('ru-RU')} ${unitLabel(m.productionUnit) || ''}/ч`.trim());
   for (const p of [...m.parameters].sort((a, b) => a.sortOrder - b.sortOrder)) {
     const value =
       p.valueType === 'BOOLEAN'
@@ -42,7 +43,7 @@ export function machinePassport(m: Machine) {
           ? 'да'
           : 'нет'
         : p.valueType === 'NUMBER'
-          ? `${Number(p.value).toLocaleString('ru-RU')}${'unitCode' in p && p.unitCode ? ` ${p.unitCode}` : ''}`
+          ? `${Number(p.value).toLocaleString('ru-RU')}${'unitCode' in p && p.unitCode ? ` ${unitLabel(p.unitCode)}` : ''}`
           : p.value;
     add(p.name, value as string);
   }

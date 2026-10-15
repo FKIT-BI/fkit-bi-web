@@ -56,7 +56,7 @@ export function SetupChecklist({ enterpriseId, readOnly }: { enterpriseId: strin
     { id: 'shifts', title: 'Смены', hint: 'По сменам считаются периоды и хронометраж', done: active(shifts.data) > 0, detail: `${active(shifts.data)} активных`, action: !readOnly && go('shifts', 'Задать смены') },
     { id: 'reasons', title: 'Причины потерь', hint: 'Из них оператор выбирает причину простоя', optional: true, done: active(reasons.data) > 0, detail: `${active(reasons.data)} активных`, action: !readOnly && go('reasons', 'Заполнить справочник') },
     { id: 'lines', title: 'Линии', hint: 'Группируют машины на схеме и в отчётах', done: active(lines.data) > 0, detail: `${active(lines.data)} активных`, action: !readOnly && go('equipment', 'Добавить линию') },
-    { id: 'machines', title: 'Машины', hint: 'Паспорт, норма выпуска, линия', done: list.length > 0, detail: `${list.length} всего`, action: !readOnly && go('equipment', 'Добавить машину') },
+    { id: 'machines', title: 'Машины', hint: 'Паспорт, норма выпуска, линия', done: list.length > 0, detail: `${list.length} всего`, action: !readOnly && go('wizard', 'Подключить машину') },
     {
       id: 'config',
       title: 'Сигналы и правила состояний',
@@ -68,9 +68,7 @@ export function SetupChecklist({ enterpriseId, readOnly }: { enterpriseId: strin
             <Group key={m.id} gap="xs" wrap="wrap">
               <Text size="sm" fw={500}>{m.name}</Text>
               {r!.errors.map((e) => <Badge key={e.code} color="red" variant="light">{e.message}</Badge>)}
-              {!readOnly && r!.errors.some((e) => e.code === 'NO_ACTIVE_SIGNALS') && <Button size="compact-xs" variant="light" onClick={() => nav.openMachine(m.id, 'signals')}>Сигналы</Button>}
-              {!readOnly && r!.errors.some((e) => e.code === 'STATE_CONFIGURATION_MISSING') && <Button size="compact-xs" variant="light" onClick={() => nav.openMachine(m.id, 'states')}>Правила</Button>}
-              {!readOnly && !r!.errors.some((e) => e.code === 'NO_ACTIVE_SIGNALS' || e.code === 'STATE_CONFIGURATION_MISSING') && <Button size="compact-xs" variant="light" onClick={() => nav.openMachine(m.id, 'passport')}>Открыть</Button>}
+              {!readOnly && <Button size="compact-xs" variant="light" onClick={() => nav.resumeMachine(m.id)}>Продолжить настройку</Button>}
             </Group>
           ))}
         </Stack>
@@ -113,7 +111,8 @@ export function SetupChecklist({ enterpriseId, readOnly }: { enterpriseId: strin
     <Stack gap="md" maw={820}>
       <Box>
         <Title order={2} fz="lg">Пошаговая настройка</Title>
-        <Text size="sm" c="dimmed">Пройдите шаги сверху вниз: после активации хотя бы одной машины данные появятся в мониторинге.</Text>
+        <Text size="sm" c="dimmed">Что уже настроено и что мешает мониторингу. Быстрее всего подключить машину через мастер — он проведёт по всем шагам.</Text>
+        {!readOnly && <Button mt="xs" onClick={() => nav.setTab('wizard')}>Подключить машину</Button>}
       </Box>
       <Progress value={(doneCount / required.length) * 100} size="sm" aria-label="Прогресс настройки" />
       {readOnly && <Alert color="gray" p="xs">Режим просмотра: для изменений выберите роль «Администратор».</Alert>}
