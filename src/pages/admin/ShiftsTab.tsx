@@ -3,10 +3,8 @@ import { IconLock, IconPencil, IconPlus } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { setup, type Shift } from '@/shared/api';
-import { Panel } from '@/shared/ui';
+import { CodeField, Panel, useAutoCode } from '@/shared/ui';
 import { confirmDisable, FormModal, setupKey, StatusBadge, StatusToggle, useStatusMutation } from './common';
-
-const CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
 
 export function ShiftsTab({ enterpriseId, readOnly }: { enterpriseId: string; readOnly: boolean }) {
   const q = useQuery({ queryKey: setupKey('shifts', enterpriseId), queryFn: () => setup.shifts(enterpriseId), enabled: !!enterpriseId });
@@ -45,14 +43,14 @@ export function ShiftsTab({ enterpriseId, readOnly }: { enterpriseId: string; re
           </Table>
         </Table.ScrollContainer>
       </Panel>
-      {edit && <ShiftForm key={edit === 'new' ? 'new' : edit.id} enterpriseId={enterpriseId} item={edit === 'new' ? null : edit} nextOrder={items.length} onClose={() => setEdit(null)} />}
+      {edit && <ShiftForm key={edit === 'new' ? 'new' : edit.id} enterpriseId={enterpriseId} item={edit === 'new' ? null : edit} taken={items.map((s) => s.code)} nextOrder={items.length} onClose={() => setEdit(null)} />}
     </Stack>
   );
 }
 
-function ShiftForm({ enterpriseId, item, nextOrder, onClose }: { enterpriseId: string; item: Shift | null; nextOrder: number; onClose: () => void }) {
-  const [code, setCode] = useState(item?.code ?? '');
+function ShiftForm({ enterpriseId, item, taken, nextOrder, onClose }: { enterpriseId: string; item: Shift | null; taken: string[]; nextOrder: number; onClose: () => void }) {
   const [name, setName] = useState(item?.name ?? '');
+  const code = useAutoCode(name, 'SHIFT', taken, item?.code);
   const [start, setStart] = useState(item?.startLocalTime ?? '08:00');
   const [end, setEnd] = useState(item?.endLocalTime ?? '20:00');
   const [from, setFrom] = useState(item?.validFrom ?? new Date().toISOString().slice(0, 10));
@@ -65,25 +63,23 @@ function ShiftForm({ enterpriseId, item, nextOrder, onClose }: { enterpriseId: s
       onClose={onClose}
       title={item ? 'Смена' : 'Новая смена'}
       success={item ? 'Смена сохранена' : 'Смена создана'}
-      canSubmit={!!name.trim() && !!start && !!end && !!from && (!!item || CODE.test(code))}
+      canSubmit={!!name.trim() && !!start && !!end && !!from && code.valid}
       submit={() => {
         const common = { name: name.trim(), startLocalTime: start, endLocalTime: end, validFrom: from, validTo: to || null, sortOrder: Number(order || 0) };
-        return item ? setup.updateShift(item.id, common) : setup.createShift(enterpriseId, { code, ...common });
+        return item ? setup.updateShift(item.id, common) : setup.createShift(enterpriseId, { code: code.value, ...common });
       }}
     >
       {(fe) => (
         <>
-          <SimpleGrid cols={2}>
-            <TextInput label="Код" disabled={!!item} required value={code} error={fe('code')} onChange={(e) => setCode(e.currentTarget.value.toUpperCase())} />
-            <NumberInput label="Порядок" min={0} value={order} error={fe('sortOrder')} onChange={(v) => setOrder(v === '' ? '' : Number(v))} />
-          </SimpleGrid>
-          <TextInput label="Название" required value={name} error={fe('name')} onChange={(e) => setName(e.currentTarget.value)} />
+          <TextInput label="Название" placeholder="День" required data-autofocus value={name} error={fe('name')} onChange={(e) => setName(e.currentTarget.value)} />
           <SimpleGrid cols={2}>
             <TextInput type="time" label="Начало" required disabled={locked} value={start} error={fe('startLocalTime')} onChange={(e) => setStart(e.currentTarget.value)} />
             <TextInput type="time" label="Конец" required disabled={locked} value={end} error={fe('endLocalTime')} onChange={(e) => setEnd(e.currentTarget.value)} />
             <TextInput type="date" label="Действует с" required disabled={locked} value={from} error={fe('validFrom')} onChange={(e) => setFrom(e.currentTarget.value)} />
             <TextInput type="date" label="Действует до" description="Пусто — бессрочно" value={to} error={fe('validTo')} onChange={(e) => setTo(e.currentTarget.value)} />
           </SimpleGrid>
+          <NumberInput label="Порядок" description="Порядок смен в течение суток" min={0} value={order} error={fe('sortOrder')} onChange={(v) => setOrder(v === '' ? '' : Number(v))} />
+          <CodeField code={code} locked={!!item} error={fe('code')} />
           {locked && <Text size="xs" c="dimmed">У смены есть история, поэтому время и дата начала заблокированы. Чтобы изменить расписание — создайте новую смену.</Text>}
         </>
       )}

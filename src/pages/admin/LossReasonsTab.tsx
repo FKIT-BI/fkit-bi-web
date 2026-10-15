@@ -4,10 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { setup, type LossCategory, type LossReason } from '@/shared/api';
 import { useTranslation } from '@/shared/i18n';
-import { Panel } from '@/shared/ui';
+import { CodeField, Panel, useAutoCode } from '@/shared/ui';
 import { confirmDisable, FormModal, setupKey, StatusBadge, StatusToggle, useStatusMutation } from './common';
 
-const CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
 const CATEGORIES: LossCategory[] = ['EQUIPMENT', 'MATERIAL', 'PERSONNEL', 'PROCESS', 'QUALITY', 'CHANGEOVER', 'EXTERNAL', 'OTHER'];
 
 export function LossReasonsTab({ enterpriseId, readOnly }: { enterpriseId: string; readOnly: boolean }) {
@@ -48,15 +47,15 @@ export function LossReasonsTab({ enterpriseId, readOnly }: { enterpriseId: strin
           </Table>
         </Table.ScrollContainer>
       </Panel>
-      {edit && <ReasonForm key={edit === 'new' ? 'new' : edit.id} enterpriseId={enterpriseId} item={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
+      {edit && <ReasonForm key={edit === 'new' ? 'new' : edit.id} enterpriseId={enterpriseId} item={edit === 'new' ? null : edit} taken={items.map((r) => r.code)} onClose={() => setEdit(null)} />}
     </Stack>
   );
 }
 
-function ReasonForm({ enterpriseId, item, onClose }: { enterpriseId: string; item: LossReason | null; onClose: () => void }) {
+function ReasonForm({ enterpriseId, item, taken, onClose }: { enterpriseId: string; item: LossReason | null; taken: string[]; onClose: () => void }) {
   const { t } = useTranslation();
-  const [code, setCode] = useState(item?.code ?? '');
   const [name, setName] = useState(item?.name ?? '');
+  const code = useAutoCode(name, 'REASON', taken, item?.code);
   const [description, setDescription] = useState(item?.description ?? '');
   const [category, setCategory] = useState<LossCategory>(item?.category ?? 'EQUIPMENT');
   const [color, setColor] = useState(item?.color ?? '');
@@ -66,16 +65,16 @@ function ReasonForm({ enterpriseId, item, onClose }: { enterpriseId: string; ite
       onClose={onClose}
       title={item ? 'Причина потерь' : 'Новая причина потерь'}
       success={item ? 'Причина сохранена' : 'Причина создана'}
-      canSubmit={!!name.trim() && (!!item || CODE.test(code)) && (!color || /^#[0-9a-fA-F]{6}$/.test(color))}
+      canSubmit={!!name.trim() && code.valid && (!color || /^#[0-9a-fA-F]{6}$/.test(color))}
       submit={() => {
         const common = { name: name.trim(), description: description.trim() || null, category, color: color || null };
-        return item ? setup.updateLossReason(item.id, common) : setup.createLossReason(enterpriseId, { code, ...common });
+        return item ? setup.updateLossReason(item.id, common) : setup.createLossReason(enterpriseId, { code: code.value, ...common });
       }}
     >
       {(fe) => (
         <>
-          <TextInput label="Код" description="A–Z, цифры, _" disabled={!!item} required value={code} error={fe('code')} onChange={(e) => setCode(e.currentTarget.value.toUpperCase())} />
-          <TextInput label="Название" required value={name} error={fe('name')} onChange={(e) => setName(e.currentTarget.value)} />
+          <TextInput label="Название" description="Почему машина стояла — оператор выбирает причину при разборе простоя" placeholder="Нет сырья" required data-autofocus value={name} error={fe('name')} onChange={(e) => setName(e.currentTarget.value)} />
+          <CodeField code={code} locked={!!item} error={fe('code')} />
           <Textarea label="Описание" autosize minRows={2} maxLength={500} value={description} error={fe('description')} onChange={(e) => setDescription(e.currentTarget.value)} />
           <NativeSelect label="Категория" value={category} data={CATEGORIES.map((c) => ({ value: c, label: t(`category.${c}`) }))} error={fe('category')} onChange={(e) => setCategory(e.currentTarget.value as LossCategory)} />
           <ColorInput label="Цвет" format="hex" placeholder="#RRGGBB" value={color} error={fe('color')} onChange={setColor} />

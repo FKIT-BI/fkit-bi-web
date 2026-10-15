@@ -70,3 +70,7 @@ export type MachineStateConfiguration = S['MachineStateConfiguration'];
 export type StateRuleInput = S['StateRuleInput'];
 export type Condition = S['Condition'];
 export type ComparisonOperator = S['ComparisonOperator'];
+export type Freshness = S['Freshness'];
+export type TelemetryQuality = S['TelemetryQuality'];
+export type EvaluationQuality = S['EvaluationQuality'];
+export type StateSource = S['StateSource'];

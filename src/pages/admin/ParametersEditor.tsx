@@ -1,6 +1,7 @@
 import { ActionIcon, Button, Group, NativeSelect, NumberInput, Stack, Switch, Text, TextInput } from '@mantine/core';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 import type { MeasurementUnit, TypedParameter } from '@/shared/api';
+import { makeCode } from '@/shared/lib';
 import { unitOptions } from './units';
 
 type Row = { code: string; name: string; valueType: 'STRING' | 'NUMBER' | 'BOOLEAN'; value: string | number | boolean; unitCode?: string | null; sortOrder: number };
@@ -10,6 +11,13 @@ const initial = (t: Row['valueType']): Row['value'] => (t === 'NUMBER' ? 0 : t =
 export function ParametersEditor({ value, units, errorFor, onChange }: { value: TypedParameter[]; units: MeasurementUnit[]; errorFor?: (path: string) => string | undefined; onChange: (v: TypedParameter[]) => void }) {
   const rows = value as unknown as Row[];
   const set = (i: number, p: Partial<Row>) => onChange(rows.map((r, n) => (n === i ? { ...r, ...p } : r)) as unknown as TypedParameter[]);
+  const others = (i: number) => rows.filter((_, n) => n !== i).map((r) => r.code);
+  /** Пока код пуст или совпадает с автоматическим — он следует за названием. */
+  const rename = (i: number, name: string) => {
+    const r = rows[i];
+    const auto = !r.code || r.code === makeCode(r.name, 'PARAM', others(i));
+    set(i, auto ? { name, code: makeCode(name, 'PARAM', others(i)) } : { name });
+  };
   return (
     <Stack gap={6}>
       <Group justify="space-between">
@@ -21,8 +29,8 @@ export function ParametersEditor({ value, units, errorFor, onChange }: { value: 
       </Group>
       {rows.map((r, i) => (
         <Group key={i} gap={6} align="flex-end" wrap="wrap">
-          <TextInput size="xs" label={i === 0 ? 'Код' : undefined} w={130} value={r.code} onChange={(e) => set(i, { code: e.currentTarget.value.toUpperCase() })} />
-          <TextInput size="xs" label={i === 0 ? 'Название' : undefined} style={{ flex: 1, minWidth: 120 }} value={r.name} onChange={(e) => set(i, { name: e.currentTarget.value })} />
+          <TextInput size="xs" label={i === 0 ? 'Название' : undefined} style={{ flex: 1, minWidth: 120 }} value={r.name} onChange={(e) => rename(i, e.currentTarget.value)} />
+          <TextInput size="xs" label={i === 0 ? 'Код' : undefined} description={i === 0 ? 'из названия' : undefined} w={130} ff="monospace" value={r.code} onChange={(e) => set(i, { code: e.currentTarget.value.toUpperCase() })} />
           <NativeSelect size="xs" label={i === 0 ? 'Тип' : undefined} value={r.valueType} data={[{ value: 'STRING', label: 'Текст' }, { value: 'NUMBER', label: 'Число' }, { value: 'BOOLEAN', label: 'Да/нет' }]}
             onChange={(e) => { const t = e.currentTarget.value as Row['valueType']; set(i, { valueType: t, value: initial(t), unitCode: t === 'NUMBER' ? r.unitCode : undefined }); }} />
           {r.valueType === 'NUMBER' && <NumberInput size="xs" label={i === 0 ? 'Значение' : undefined} w={110} value={Number(r.value)} onChange={(v) => set(i, { value: Number(v || 0) })} />}

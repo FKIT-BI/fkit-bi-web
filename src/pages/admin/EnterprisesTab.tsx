@@ -3,6 +3,7 @@ import { IconPencil, IconPlus } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { setup, type Enterprise } from '@/shared/api';
+import { enumLabel, TIMEZONE } from '@/shared/i18n';
 import { Panel } from '@/shared/ui';
 import { EnterpriseForm } from '@/features/enterprise-form';
 import { confirmDisable, setupKey, StatusBadge, StatusToggle, useStatusMutation } from './common';
@@ -32,7 +33,7 @@ export function EnterprisesTab({ readOnly }: { readOnly: boolean }) {
                 <Table.Tr key={e.id}>
                   <Table.Td ff="monospace">{e.code}</Table.Td>
                   <Table.Td>{e.name}</Table.Td>
-                  <Table.Td>{e.timezone}</Table.Td>
+                  <Table.Td>{enumLabel(TIMEZONE, e.timezone)}</Table.Td>
                   <Table.Td><StatusBadge status={e.status} /></Table.Td>
                   <Table.Td>
                     {!readOnly && (

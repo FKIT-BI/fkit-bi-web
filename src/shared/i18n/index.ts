@@ -11,3 +11,4 @@ void i18n.use(initReactI18next).init({
 
 export { i18n };
 export { useTranslation } from 'react-i18next';
+export * from './dictionaries';

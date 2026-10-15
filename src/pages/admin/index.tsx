@@ -1,6 +1,8 @@
-import { Group, Select, Tabs, Text } from '@mantine/core';
+import { Button, Group, Select, Tabs, Text } from '@mantine/core';
+import { IconHelp } from '@tabler/icons-react';
 import { useState } from 'react';
 import { canAdminister, useAdminNav, useEnterpriseChoice, useUiStore } from '@/shared/model';
+import { HelpDrawer } from '@/shared/ui';
 import { EnterprisesTab, useEnterprises } from './EnterprisesTab';
 import { EquipmentSetup } from './EquipmentSetup';
 import { LinesMachinesTab } from './LinesMachinesTab';
@@ -13,6 +15,7 @@ export default function AdminPage() {
   const setTab = useAdminNav((s) => s.setTab);
   const chosen = useEnterpriseChoice((s) => s.id);
   const [picked, setPicked] = useState<string | null>(null);
+  const [help, setHelp] = useState(false);
   const readOnly = !canAdminister(useUiStore((s) => s.role));
   const enterprises = useEnterprises();
   const list = enterprises.data ?? [];
@@ -30,9 +33,12 @@ export default function AdminPage() {
           <Tabs.Tab value="reasons">Причины потерь</Tabs.Tab>
           <Tabs.Tab value="wizard">Мастер настройки</Tabs.Tab>
         </Tabs.List>
-        {scoped && list.length > 0 && (
-          <Select size="xs" w={260} aria-label="Предприятие" allowDeselect={false} value={enterpriseId} data={list.map((e) => ({ value: e.id, label: e.status === 'ACTIVE' ? e.name : `${e.name} (отключено)` }))} onChange={setPicked} />
-        )}
+        <Group gap="xs">
+          {scoped && list.length > 0 && (
+            <Select size="xs" w={260} aria-label="Предприятие" allowDeselect={false} value={enterpriseId} data={list.map((e) => ({ value: e.id, label: e.status === 'ACTIVE' ? e.name : `${e.name} (отключено)` }))} onChange={setPicked} />
+          )}
+          <Button size="xs" variant="subtle" leftSection={<IconHelp size={14} />} onClick={() => setHelp(true)}>Справка</Button>
+        </Group>
       </Group>
       {readOnly && tab !== 'wizard' && <Text size="xs" c="dimmed" mb="xs">Режим просмотра. Для изменений выберите роль «Администратор» (переключатель в шапке).</Text>}
       <Tabs.Panel value="setup"><SetupChecklist enterpriseId={enterpriseId} readOnly={readOnly} /></Tabs.Panel>
@@ -41,6 +47,7 @@ export default function AdminPage() {
       <Tabs.Panel value="shifts"><ShiftsTab enterpriseId={enterpriseId} readOnly={readOnly} /></Tabs.Panel>
       <Tabs.Panel value="reasons"><LossReasonsTab enterpriseId={enterpriseId} readOnly={readOnly} /></Tabs.Panel>
       <Tabs.Panel value="wizard"><EquipmentSetup /></Tabs.Panel>
+      <HelpDrawer opened={help} onClose={() => setHelp(false)} />
     </Tabs>
   );
 }

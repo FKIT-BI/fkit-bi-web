@@ -14,7 +14,7 @@ import { useMemo, useState } from 'react';
 import { EnterpriseForm } from '@/features/enterprise-form';
 import { api, type Enterprise } from '@/shared/api';
 import { levelOf, STATE_CODES, STATE_META, type StateCode } from '@/shared/config';
-import { useTranslation } from '@/shared/i18n';
+import { enumLabel, TIMEZONE, useTranslation } from '@/shared/i18n';
 import { formatPercent, runShare } from '@/shared/lib';
 import { useAdminNav, useAuth, useEnterpriseChoice, useNow } from '@/shared/model';
 
@@ -45,7 +45,7 @@ function EnterpriseCard({ enterprise, onOpen, onSetup }: { enterprise: Enterpris
             <ThemeIcon size={40} radius="md" variant="light" color="orange"><IconBuildingFactory2 size={22} /></ThemeIcon>
             <Box miw={0}>
               <Text fw={700} lh={1.2} truncate>{enterprise.name}</Text>
-              <Text size="xs" c="dimmed" truncate>{enterprise.code} · {enterprise.timezone}</Text>
+              <Text size="xs" c="dimmed" truncate>{enterprise.code} · {enumLabel(TIMEZONE, enterprise.timezone)}</Text>
             </Box>
           </Group>
           {stopped > 0 ? <Badge color="red" variant="light" leftSection={<IconAlertCircle size={12} />}>{stopped} стоят</Badge> : total > 0 ? <Badge color="green" variant="light">В норме</Badge> : null}
